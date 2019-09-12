@@ -1,0 +1,4 @@
+tensorflow-gpu==2.0.0-rc0
+mock
+tqdm
+numpy
