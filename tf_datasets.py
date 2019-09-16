@@ -102,6 +102,9 @@ class Database(ABC):
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
+    def get_umtra_dataset(self, folders, n, k, meta_batch_size, one_hot_labels=True):
+        pass
+
 
 class OmniglotDatabase(Database):
     def __init__(self, random_seed=-1, config=None):
