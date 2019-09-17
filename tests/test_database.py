@@ -2,6 +2,7 @@ import os
 import unittest
 import copy
 from unittest.mock import patch
+from collections import deque
 
 import tensorflow as tf
 
@@ -22,10 +23,10 @@ class TestOmniglotDatabase(unittest.TestCase):
                     'n': 6, 'k': 4, 'meta_batch_size': 5
                 },
                 'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
                 'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
             },
             {
@@ -35,10 +36,10 @@ class TestOmniglotDatabase(unittest.TestCase):
                     'n': 650, 'k': 4, 'meta_batch_size': 1
                 },
                 'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
                 'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
             },
             {
@@ -48,10 +49,10 @@ class TestOmniglotDatabase(unittest.TestCase):
                     'n': 7, 'k': 4, 'meta_batch_size': 600
                 },
                 'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
                 'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
             },
             {
@@ -61,10 +62,10 @@ class TestOmniglotDatabase(unittest.TestCase):
                     'n': 7, 'k': 4, 'meta_batch_size': 11
                 },
                 'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
                 'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 3
+                    'n': 6, 'k': 4, 'meta_batch_size': 1
                 },
             },
         ]
@@ -321,11 +322,11 @@ class TestOmniglotDatabase(unittest.TestCase):
             class_instances[1] = dict()
 
             for epoch in range(2):
-                iteartion = 0
+                iteration = 0
                 for task_meta_batch, labels_meta_batch in database.train_ds:
-                    if iteartion == database.train_ds.steps_per_epoch:
+                    if iteration == database.train_ds.steps_per_epoch:
                         break
-                    iteartion += 1
+                    iteration += 1
 
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
@@ -346,10 +347,60 @@ class TestOmniglotDatabase(unittest.TestCase):
                                 if class_name not in class_instances[epoch]:
                                     class_instances[epoch][class_name] = set()
                                 class_instances[epoch][class_name].add(instance_name)
-            
+
             first_epoch_class_instances = class_instances[0]
             second_epoch_class_instances = class_instances[1]
 
             for class_name in first_epoch_class_instances.keys():
                 self.assertIn(class_name, second_epoch_class_instances)
                 self.assertNotEqual(0, first_epoch_class_instances[class_name].difference(second_epoch_class_instances[class_name]))
+
+    @patch('tf_datasets.OmniglotDatabase._get_parse_function')
+    def test_validation_dataset_will_repeat(self, mocked_parse_function):
+        """"Test create their own data folder near where they are running from. tests directory in project
+        Fix this.
+        """
+        """I want the validation dataset to repeat the same tasks again and again.
+        This test should pass. It just passes just when I make the task from scratch again.
+        I am wondering how can we come up with an idea to make it work.
+        """
+        mocked_parse_function.return_value = self.parse_function
+        for config in self.configs:
+            database = OmniglotDatabase(random_seed=2, config=config)
+            n = config['val_dataset_kwargs']['n']
+            k = config['val_dataset_kwargs']['k']
+            mbs = config['val_dataset_kwargs']['meta_batch_size']
+
+            class_names_queue = deque()
+
+            for epoch in range(2):
+                # database = OmniglotDatabase(random_seed=2, config=config)
+                # n = config['val_dataset_kwargs']['n']
+                # k = config['val_dataset_kwargs']['k']
+                # mbs = config['val_dataset_kwargs']['meta_batch_size']
+                iteration = 0
+                for task_meta_batch, labels_meta_batch in database.val_ds:
+                    if iteration == database.val_ds.steps_per_epoch - 1:
+                        break
+                    iteration += 1
+
+                    for task_index in range(mbs):
+                        task = task_meta_batch[task_index, ...]
+                        task_labels = labels_meta_batch[task_index, ...]
+
+                        train_ds, val_ds = tf.split(task, num_or_size_splits=2)
+                        train_labels, val_labels = tf.split(task_labels, num_or_size_splits=2)
+
+                        train_ds = tf.squeeze(train_ds, axis=0)
+                        val_ds = tf.squeeze(val_ds, axis=0)
+                        train_labels = tf.squeeze(train_labels, axis=0)
+                        val_labels = tf.squeeze(val_labels, axis=0)
+
+                        for class_index in range(n):
+                            for instance_index in range(k):
+                                instance_address = train_ds[class_index, instance_index, ...]
+                                class_name, instance_name = os.path.split(instance_address.numpy().decode('utf-8'))
+                                if epoch == 0:
+                                    class_names_queue.append(class_name)
+                                else:
+                                    self.assertEqual(class_name, class_names_queue.popleft())

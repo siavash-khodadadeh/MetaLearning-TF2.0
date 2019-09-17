@@ -11,12 +11,16 @@ import settings
 
 
 # TODO
-# Add tensorboard.
-# Save the model and logs.
-# Make batch norm settings in config if necassary.
-# Add evaluation.
+# The validation should always be the same. (Should not change during the training).
+# Look at the performance of validation tasks during the training.
+# Visualize all validation tasks just once.
+
+# Test visualization could be done on all images or some of them
+# Train visualization could be done after some iterations.
+
 # Check if the tf.function can help with improving speed.
 # Make it possible to train on multiple GPUs (Not very necassary now), but we have to make it fast with tf.function.
+# Add evaluation without implementing the inner loop to test the correctness.
 
 
 class ModelAgnosticMetaLearningModel(object):
@@ -56,8 +60,6 @@ class ModelAgnosticMetaLearningModel(object):
         self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
         self.val_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/val/')
         self.val_summary_writer = tf.summary.create_file_writer(self.val_log_dir)
-        self.test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
-        self.test_summary_writer = tf.summary.create_file_writer(self.test_log_dir)
 
         self.checkpoint_dir = os.path.join(self._root, self.get_config_info(), 'saved_models/')
 
@@ -155,6 +157,63 @@ class ModelAgnosticMetaLearningModel(object):
         if checkpoint_path is not None:
             print('==================\nResuming Training\n==================')
             self.model.load_weights(checkpoint_path)
+        else:
+            print('No previous checkpoint found!')
+
+    def evaluate(self, iterations):
+        self.load_model()
+        test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
+        test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
+        test_accuracy_metric = tf.metrics.Accuracy()
+        test_loss_metric = tf.metrics.Mean()
+
+        test_counter = 0
+        for tmb, lmb in self.database.test_ds:
+            if test_counter == self.database.test_ds.steps_per_epoch:
+                break
+            test_counter += 1
+            for task, labels in zip(tmb, lmb):
+                train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
+                updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
+                updated_model_logits = updated_model(val_ds, training=False)
+
+                self.update_loss_and_accuracy(updated_model_logits, val_labels, test_loss_metric, test_accuracy_metric)
+
+            self.log_metric(self.val_summary_writer, 'Loss', test_loss_metric, step=1)
+            self.log_metric(self.val_summary_writer, 'Accuracy', test_accuracy_metric, step=1)
+
+            print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
+            print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
+
+    def log_images(self, summary_writer, train_ds, val_ds, step):
+        with summary_writer.as_default():
+            tf.summary.image(
+                'train',
+                train_ds,
+                step=step,
+                max_outputs=5
+            )
+            tf.summary.image(
+                'validation',
+                val_ds,
+                step=step,
+                max_outputs=5
+            )
+
+    def update_loss_and_accuracy(self, logits, labels, loss_metric, accuracy_metric):
+        print(tf.argmax(logits, axis=-1))
+        val_loss = tf.reduce_sum(
+            tf.losses.categorical_crossentropy(labels, logits, from_logits=True))
+        loss_metric.update_state(val_loss)
+        accuracy_metric.update_state(
+            tf.argmax(labels, axis=-1),
+            tf.argmax(logits, axis=-1)
+        )
+
+    def log_metric(self, summary_writer, name, metric, step):
+        with summary_writer.as_default():
+            tf.summary.scalar(name, metric.result(), step=step)
 
     def report_validation_loss_and_accuracy(self, epoch_count):
         self.val_loss_metric.reset_states()
@@ -167,22 +226,19 @@ class ModelAgnosticMetaLearningModel(object):
             val_counter += 1
             for task, labels in zip(tmb, lmb):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
+                if val_counter % 5 == 0:
+                    step = epoch_count * self.database.val_ds.steps_per_epoch + val_counter
+                    self.log_images(self.val_summary_writer, train_ds, val_ds, step)
 
-                updated_model = self.inner_train_loop(train_ds, train_labels, 1)
+                updated_model = self.inner_train_loop(train_ds, train_labels, self.config['num_steps_validation'])
                 updated_model_logits = updated_model(val_ds, training=False)
 
-                print(tf.argmax(updated_model_logits, axis=-1))
-                val_loss = tf.reduce_sum(
-                    tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True))
-                self.val_loss_metric.update_state(val_loss)
-                self.val_accuracy_metric.update_state(
-                    tf.argmax(val_labels, axis=-1),
-                    tf.argmax(updated_model_logits, axis=-1)
+                self.update_loss_and_accuracy(
+                    updated_model_logits, val_labels, self.val_loss_metric, self.val_accuracy_metric
                 )
 
-        with self.val_summary_writer.as_default():
-            tf.summary.scalar('Loss', self.val_loss_metric.result(), step=epoch_count)
-            tf.summary.scalar('Accuracy', self.val_accuracy_metric.result(), step=epoch_count)
+        self.log_metric(self.val_summary_writer, 'Loss', self.val_loss_metric, step=epoch_count)
+        self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
 
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
@@ -222,7 +278,7 @@ class ModelAgnosticMetaLearningModel(object):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
 
                 with tf.GradientTape(persistent=True) as val_tape:
-                    updated_model = self.inner_train_loop(train_ds, train_labels, 1)
+                    updated_model = self.inner_train_loop(train_ds, train_labels, self.config['num_steps_ml'])
                     updated_model_logits = updated_model(val_ds, training=False)
                     val_loss = tf.reduce_sum(
                         tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
@@ -255,13 +311,13 @@ if __name__ == '__main__':
                 'num_train_classes': 1200,
                 'num_val_classes': 100,
                 'train_dataset_kwargs': {
-                    'n': 5, 'k': 5, 'meta_batch_size': 32
+                    'n': 5, 'k': 1, 'meta_batch_size': 32
                 },
                 'val_dataset_kwargs': {
-                    'n': 5, 'k': 5, 'meta_batch_size': 1
+                    'n': 5, 'k': 1, 'meta_batch_size': 1
                 },
                 'test_dataset_kwargs': {
-                    'n': 5, 'k': 5, 'meta_batch_size': 1
+                    'n': 5, 'k': 1, 'meta_batch_size': 1
                 },
             },
         },
@@ -269,10 +325,12 @@ if __name__ == '__main__':
             'class': SimpleModel,
             'init_kwargs': {'num_classes': 5},
         },
-        'lr_inner_ml': 0.05,
+        'lr_inner_ml': 0.01,
         'num_steps_ml': 5,
+        'num_steps_validation': 5,
         'save_after_epochs': 3,
     }
 
     maml = ModelAgnosticMetaLearningModel(config)
     maml.train(epochs=100)
+    maml.evaluate(iterations=50)

@@ -12,6 +12,7 @@ class Database(ABC):
     def __init__(self, raw_database_address, database_address, random_seed=-1, config=None):
         if random_seed != -1:
             random.seed(random_seed)
+            tf.random.set_seed(random_seed)
         
         if config is None:
             config = {}
@@ -48,6 +49,9 @@ class Database(ABC):
         self.check_number_of_samples_at_each_class_meet_minimum(self.train_folders, self.config['train_dataset_kwargs']['k'])
         self.check_number_of_samples_at_each_class_meet_minimum(self.val_folders, self.config['val_dataset_kwargs']['k'])
         self.check_number_of_samples_at_each_class_meet_minimum(self.test_folders, self.config['test_dataset_kwargs']['k'])
+
+        assert(self.config['val_dataset_kwargs']['meta_batch_size'] == 1)
+        assert (self.config['test_dataset_kwargs']['meta_batch_size'] == 1)
 
         return self.get_supervised_meta_learning_dataset(
             self.train_folders, 
@@ -113,9 +117,10 @@ class OmniglotDatabase(Database):
     def _get_parse_function(self):
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
-            image = tf.cast(image, tf.float32)
             image = tf.image.resize(image, (28, 28))
-            return (image / 255.) * 2 - 1
+            image = tf.cast(image, tf.float32)
+
+            return 1 - (image / 255.)
 
         return parse_function
 
