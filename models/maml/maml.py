@@ -11,8 +11,7 @@ import settings
 
 
 # TODO
-# The validation should always be the same. (Should not change during the training).
-# Look at the performance of validation tasks during the training.
+# Add miniImagenet
 # Visualize all validation tasks just once.
 
 # Test visualization could be done on all images or some of them
@@ -168,11 +167,7 @@ class ModelAgnosticMetaLearningModel(object):
         test_accuracy_metric = tf.metrics.Accuracy()
         test_loss_metric = tf.metrics.Mean()
 
-        test_counter = 0
         for tmb, lmb in self.database.test_ds:
-            if test_counter == self.database.test_ds.steps_per_epoch:
-                break
-            test_counter += 1
             for task, labels in zip(tmb, lmb):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
                 updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
@@ -180,8 +175,8 @@ class ModelAgnosticMetaLearningModel(object):
 
                 self.update_loss_and_accuracy(updated_model_logits, val_labels, test_loss_metric, test_accuracy_metric)
 
-            self.log_metric(self.val_summary_writer, 'Loss', test_loss_metric, step=1)
-            self.log_metric(self.val_summary_writer, 'Accuracy', test_accuracy_metric, step=1)
+            self.log_metric(test_summary_writer, 'Loss', test_loss_metric, step=1)
+            self.log_metric(test_summary_writer, 'Accuracy', test_accuracy_metric, step=1)
 
             print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
             print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
@@ -221,8 +216,6 @@ class ModelAgnosticMetaLearningModel(object):
 
         val_counter = 0
         for tmb, lmb in self.database.val_ds:
-            if val_counter == self.database.val_ds.steps_per_epoch:
-                break
             val_counter += 1
             for task, labels in zip(tmb, lmb):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
@@ -249,57 +242,53 @@ class ModelAgnosticMetaLearningModel(object):
         counter = 0
 
         pbar = tqdm(self.database.train_ds)
-        for tasks_meta_batch, labels_meta_batch in self.database.train_ds:
-            if counter % self.database.train_ds.steps_per_epoch == 0:
-                # one epoch ends here
-                epoch_count += 1
-                self.report_validation_loss_and_accuracy(epoch_count)
-                if epoch_count != 0:
-                    print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
-                    print('Train Accuracy: {}'.format(self.train_accuracy_metric.result().numpy()))
+        for epoch_count in range(epochs):
+            self.report_validation_loss_and_accuracy(epoch_count)
+            if epoch_count != 0:
+                print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
+                print('Train Accuracy: {}'.format(self.train_accuracy_metric.result().numpy()))
 
-                    with self.train_summary_writer.as_default():
-                        tf.summary.scalar('Loss', self.train_loss_metric.result(), step=epoch_count)
-                        tf.summary.scalar('Accuracy', self.train_accuracy_metric.result(), step=epoch_count)
+                with self.train_summary_writer.as_default():
+                    tf.summary.scalar('Loss', self.train_loss_metric.result(), step=epoch_count)
+                    tf.summary.scalar('Accuracy', self.train_accuracy_metric.result(), step=epoch_count)
 
-                self.train_accuracy_metric.reset_states()
-                self.train_loss_metric.reset_states()
+            self.train_accuracy_metric.reset_states()
+            self.train_loss_metric.reset_states()
 
-                if epoch_count != 0 and epoch_count % self.config['save_after_epochs'] == 0:
-                    self.save_model(epoch_count)
+            if epoch_count != 0 and epoch_count % self.config['save_after_epochs'] == 0:
+                self.save_model(epoch_count)
 
-            if counter == self.database.train_ds.steps_per_epoch * epochs:
-                break
+            for tasks_meta_batch, labels_meta_batch in self.database.train_ds:
+                tasks_final_gradients = list()
 
-            counter += 1
-            tasks_final_gradients = list()
-            
-            for task, labels in zip(tasks_meta_batch, labels_meta_batch):
-                train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
+                for task, labels in zip(tasks_meta_batch, labels_meta_batch):
+                    train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
 
-                with tf.GradientTape(persistent=True) as val_tape:
-                    updated_model = self.inner_train_loop(train_ds, train_labels, self.config['num_steps_ml'])
-                    updated_model_logits = updated_model(val_ds, training=False)
-                    val_loss = tf.reduce_sum(
-                        tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
-                    )
-                    self.train_loss_metric.update_state(val_loss)
-                    self.train_accuracy_metric.update_state(
-                        tf.argmax(val_labels, axis=-1),
-                        tf.argmax(updated_model_logits, axis=-1)
-                    )
+                    with tf.GradientTape(persistent=True) as val_tape:
+                        updated_model = self.inner_train_loop(train_ds, train_labels, self.config['num_steps_ml'])
+                        updated_model_logits = updated_model(val_ds, training=False)
+                        val_loss = tf.reduce_sum(
+                            tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
+                        )
+                        self.train_loss_metric.update_state(val_loss)
+                        self.train_accuracy_metric.update_state(
+                            tf.argmax(val_labels, axis=-1),
+                            tf.argmax(updated_model_logits, axis=-1)
+                        )
 
-                val_gradients = val_tape.gradient(val_loss, self.model.trainable_variables)
-                tasks_final_gradients.append(val_gradients)
+                    val_gradients = val_tape.gradient(val_loss, self.model.trainable_variables)
+                    tasks_final_gradients.append(val_gradients)
 
-            final_gradients = average_gradients(tasks_final_gradients)
-            self.optimizer.apply_gradients(zip(final_gradients, self.model.trainable_variables))
-            pbar.set_description_str('Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
-                counter,
-                self.train_loss_metric.result().numpy(),
-                self.train_accuracy_metric.result().numpy()
-            ))
-            pbar.update(1)
+                final_gradients = average_gradients(tasks_final_gradients)
+                self.optimizer.apply_gradients(zip(final_gradients, self.model.trainable_variables))
+                counter += 1
+                pbar.set_description_str('Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
+                    counter,
+                    self.train_loss_metric.result().numpy(),
+                    self.train_accuracy_metric.result().numpy()
+                ))
+                pbar.update(1)
+
 
 
 if __name__ == '__main__':
@@ -314,7 +303,7 @@ if __name__ == '__main__':
                     'n': 5, 'k': 1, 'meta_batch_size': 32
                 },
                 'val_dataset_kwargs': {
-                    'n': 5, 'k': 1, 'meta_batch_size': 1
+                    'n': 5, 'k': 1, 'meta_batch_size': 1, 'reshuffle_each_iteration': False
                 },
                 'test_dataset_kwargs': {
                     'n': 5, 'k': 1, 'meta_batch_size': 1
@@ -332,5 +321,5 @@ if __name__ == '__main__':
     }
 
     maml = ModelAgnosticMetaLearningModel(config)
-    maml.train(epochs=100)
+    # maml.train(epochs=100)
     maml.evaluate(iterations=50)

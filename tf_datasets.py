@@ -5,7 +5,7 @@ import random
 
 import tensorflow as tf
 
-from settings import OMNIGLOT_RAW_DATA_ADDRESS
+import settings
 
 
 class Database(ABC):
@@ -66,7 +66,7 @@ class Database(ABC):
 
     def _get_instances(self, k):
         def get_instances(class_dir_address):
-            return tf.data.Dataset.list_files(class_dir_address, shuffle=True).take(2 * k)
+            return tf.data.Dataset.list_files(class_dir_address, shuffle=False).take(2 * k)
         return get_instances
 
     def _get_parse_function(self):
@@ -74,8 +74,18 @@ class Database(ABC):
             return example_address
         return parse_function
 
-    def get_supervised_meta_learning_dataset(self, folders, n, k, meta_batch_size, one_hot_labels=True):
+    def get_supervised_meta_learning_dataset(
+            self,
+            folders,
+            n,
+            k,
+            meta_batch_size,
+            one_hot_labels=True,
+            reshuffle_each_iteration=True,
+            # num_repeats=-1
+    ):
         classes = [class_name + '/*' for class_name in folders]
+        steps_per_epoch = len(classes) // n // meta_batch_size
 
         labels_dataset = tf.data.Dataset.range(n)
         if one_hot_labels:
@@ -87,10 +97,10 @@ class Database(ABC):
             block_length=k
         )
         labels_dataset = labels_dataset.repeat(meta_batch_size)
-        labels_dataset = labels_dataset.repeat(-1)
+        labels_dataset = labels_dataset.repeat(steps_per_epoch)
 
         dataset = tf.data.Dataset.from_tensor_slices(classes)
-        dataset = dataset.shuffle(buffer_size=len(folders))
+        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
         dataset = dataset.interleave(self._get_instances(k), cycle_length=n, block_length=k)
         dataset = dataset.map(self._get_parse_function())
 
@@ -100,7 +110,6 @@ class Database(ABC):
         dataset = dataset.batch(n, drop_remainder=True)
         dataset = dataset.batch(2, drop_remainder=True)
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-        dataset = dataset.repeat(-1)
 
         steps_per_epoch = len(classes) // n // meta_batch_size
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
@@ -112,8 +121,13 @@ class Database(ABC):
 
 class OmniglotDatabase(Database):
     def __init__(self, random_seed=-1, config=None):
-        super(OmniglotDatabase, self).__init__(OMNIGLOT_RAW_DATA_ADDRESS, './data/omniglot', random_seed=random_seed, config=config)
-    
+        super(OmniglotDatabase, self).__init__(
+            settings.OMNIGLOT_RAW_DATA_ADDRESS,
+            os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/omniglot'),
+            random_seed=random_seed,
+            config=config
+        )
+
     def _get_parse_function(self):
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
