@@ -4,15 +4,18 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
-from tf_datasets import OmniglotDatabase
-from networks import SimpleModel
+from tf_datasets import OmniglotDatabase, MiniImagenetDatabase
+from networks import SimpleModel, MiniImagenetModel
+from models.base_model import  BaseModel
 from utils import combine_first_two_axes, average_gradients
 import settings
 
 
 # TODO
-# Add miniImagenet
+# Visualize the training images every now and then to see if it seems correct. Especially useful for umtra
 # Visualize all validation tasks just once.
+
+# Fix tests and add tests for umtra
 
 # Test visualization could be done on all images or some of them
 # Train visualization could be done after some iterations.
@@ -22,39 +25,39 @@ import settings
 # Add evaluation without implementing the inner loop to test the correctness.
 
 
-class ModelAgnosticMetaLearningModel(object):
-    def __init__(self, config):
-        self.config = config
-        self.database_config = self.config['database']
-        self.database = self.database_config['database_class'](
-            self.database_config['random_seed'], 
-            self.database_config['config']
-        )
+class ModelAgnosticMetaLearningModel(BaseModel):
+    def __init__(
+        self,
+        database,
+        network_cls,
+        n,
+        k,
+        meta_batch_size,
+        num_steps_ml,
+        lr_inner_ml,
+        num_steps_validation,
+        save_after_epochs,
+    ):
+        self.n = n
+        self.k = k
+        self.meta_batch_size = meta_batch_size
+        self.num_steps_ml = num_steps_ml
+        self.lr_inner_ml = lr_inner_ml
+        self.num_steps_validation = num_steps_validation
+        self.save_after_epochs = save_after_epochs
+        super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
-        self.model = self.config['model']['class'](**self.config['model']['init_kwargs'])
+        self.model = self.network_cls(num_classes=self.n)
         self.model.predict(
-            tf.zeros(
-                shape=(
-                    self.database_config['config']['train_dataset_kwargs']['n'] *
-                    self.database_config['config']['train_dataset_kwargs']['k'], 28, 28, 1
-                )
-            )
-        )
-        self.updated_model = self.config['model']['class'](**self.config['model']['init_kwargs'])
-        self.updated_model(
-            tf.zeros(
-                shape=(
-                    self.database_config['config']['train_dataset_kwargs']['n'] *
-                    self.database_config['config']['train_dataset_kwargs']['k'], 28, 28, 1
-                )
-            )
-        )
+            tf.zeros(shape=(n * k, *self.database.input_shape)))
+        self.updated_model = self.network_cls(num_classes=self.n)
+        self.updated_model(tf.zeros(shape=(n * k, *self.database.input_shape)))
 
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         self.val_accuracy_metric = tf.metrics.Accuracy()
         self.val_loss_metric = tf.metrics.Mean()
 
-        self._root = os.path.dirname(__file__)
+        self._root = self.get_root()
         self.train_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/train/')
         self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
         self.val_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/val/')
@@ -65,12 +68,40 @@ class ModelAgnosticMetaLearningModel(object):
         self.train_accuracy_metric = tf.metrics.Accuracy()
         self.train_loss_metric = tf.metrics.Mean()
 
+    def get_root(self):
+        return os.path.dirname(__file__)
+
+    def get_train_dataset(self):
+        return self.database.get_supervised_meta_learning_dataset(
+            self.database.train_folders,
+            n=self.n,
+            k=self.k,
+            meta_batch_size=self.meta_batch_size
+        )
+
+    def get_val_dataset(self):
+        return self.database.get_supervised_meta_learning_dataset(
+            self.database.val_folders,
+            n=self.n,
+            k=self.k,
+            meta_batch_size=1,
+            reshuffle_each_iteration=False
+        )
+
+    def get_test_dataset(self):
+        return self.database.get_supervised_meta_learning_dataset(
+            self.database.test_folders,
+            n=self.n,
+            k=self.k,
+            meta_batch_size=1,
+        )
+
     def get_config_info(self):
-        return f'model-{self.config["model"]["class"].name}_' \
-               f'mbs-{self.config["database"]["config"]["train_dataset_kwargs"]["meta_batch_size"]}_' \
-               f'n-{self.config["database"]["config"]["train_dataset_kwargs"]["n"]}_' \
-               f'k-{self.config["database"]["config"]["train_dataset_kwargs"]["k"]}_' \
-               f'stp-{self.config["num_steps_ml"]}'
+        return f'model-{self.network_cls.name}_' \
+               f'mbs-{self.meta_batch_size}_' \
+               f'n-{self.n}_' \
+               f'k-{self.k}_' \
+               f'stp-{self.num_steps_ml}'
 
     def create_meta_model(self, model, gradients):
         k = 0
@@ -79,11 +110,11 @@ class ModelAgnosticMetaLearningModel(object):
         for i in range(len(model.layers)):
             if isinstance(model.layers[i], tf.keras.layers.Conv2D) or \
              isinstance(model.layers[i], tf.keras.layers.Dense):
-                self.updated_model.layers[i].kernel = model.layers[i].kernel - self.config['lr_inner_ml'] * gradients[k]
+                self.updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
                 k += 1
                 variables.append(self.updated_model.layers[i].kernel)
 
-                self.updated_model.layers[i].bias = model.layers[i].bias - self.config['lr_inner_ml'] * gradients[k]
+                self.updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
                 k += 1
                 variables.append(self.updated_model.layers[i].bias)
 
@@ -93,12 +124,12 @@ class ModelAgnosticMetaLearningModel(object):
                 if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
                     self.updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
                 if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
-                    self.updated_model.layers[i].gamma = model.layers[i].gamma - self.config['lr_inner_ml'] * gradients[k]
+                    self.updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
                     k += 1
                     variables.append(self.updated_model.layers[i].gamma)
                 if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
                     self.updated_model.layers[i].beta = \
-                        model.layers[i].beta - self.config['lr_inner_ml'] * gradients[k]
+                        model.layers[i].beta - self.lr_inner_ml * gradients[k]
                     k += 1
                     variables.append(self.updated_model.layers[i].beta)
 
@@ -167,7 +198,7 @@ class ModelAgnosticMetaLearningModel(object):
         test_accuracy_metric = tf.metrics.Accuracy()
         test_loss_metric = tf.metrics.Mean()
 
-        for tmb, lmb in self.database.test_ds:
+        for tmb, lmb in self.test_dataset:
             for task, labels in zip(tmb, lmb):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
                 updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
@@ -215,15 +246,15 @@ class ModelAgnosticMetaLearningModel(object):
         self.val_accuracy_metric.reset_states()
 
         val_counter = 0
-        for tmb, lmb in self.database.val_ds:
+        for tmb, lmb in self.val_dataset:
             val_counter += 1
             for task, labels in zip(tmb, lmb):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
                 if val_counter % 5 == 0:
-                    step = epoch_count * self.database.val_ds.steps_per_epoch + val_counter
+                    step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
                     self.log_images(self.val_summary_writer, train_ds, val_ds, step)
 
-                updated_model = self.inner_train_loop(train_ds, train_labels, self.config['num_steps_validation'])
+                updated_model = self.inner_train_loop(train_ds, train_labels, self.num_steps_validation)
                 updated_model_logits = updated_model(val_ds, training=False)
 
                 self.update_loss_and_accuracy(
@@ -241,7 +272,7 @@ class ModelAgnosticMetaLearningModel(object):
         epoch_count = -1
         counter = 0
 
-        pbar = tqdm(self.database.train_ds)
+        pbar = tqdm(self.train_dataset)
         for epoch_count in range(epochs):
             self.report_validation_loss_and_accuracy(epoch_count)
             if epoch_count != 0:
@@ -255,17 +286,17 @@ class ModelAgnosticMetaLearningModel(object):
             self.train_accuracy_metric.reset_states()
             self.train_loss_metric.reset_states()
 
-            if epoch_count != 0 and epoch_count % self.config['save_after_epochs'] == 0:
+            if epoch_count != 0 and epoch_count % self.save_after_epochs == 0:
                 self.save_model(epoch_count)
 
-            for tasks_meta_batch, labels_meta_batch in self.database.train_ds:
+            for tasks_meta_batch, labels_meta_batch in self.train_dataset:
                 tasks_final_gradients = list()
 
                 for task, labels in zip(tasks_meta_batch, labels_meta_batch):
                     train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
 
                     with tf.GradientTape(persistent=True) as val_tape:
-                        updated_model = self.inner_train_loop(train_ds, train_labels, self.config['num_steps_ml'])
+                        updated_model = self.inner_train_loop(train_ds, train_labels, self.num_steps_ml)
                         updated_model_logits = updated_model(val_ds, training=False)
                         val_loss = tf.reduce_sum(
                             tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
@@ -290,36 +321,24 @@ class ModelAgnosticMetaLearningModel(object):
                 pbar.update(1)
 
 
-
 if __name__ == '__main__':
-    config = {
-        'database': {
-            'database_class': OmniglotDatabase,
-            'random_seed': -1,
-            'config': {
-                'num_train_classes': 1200,
-                'num_val_classes': 100,
-                'train_dataset_kwargs': {
-                    'n': 5, 'k': 1, 'meta_batch_size': 32
-                },
-                'val_dataset_kwargs': {
-                    'n': 5, 'k': 1, 'meta_batch_size': 1, 'reshuffle_each_iteration': False
-                },
-                'test_dataset_kwargs': {
-                    'n': 5, 'k': 1, 'meta_batch_size': 1
-                },
-            },
-        },
-        'model': {
-            'class': SimpleModel,
-            'init_kwargs': {'num_classes': 5},
-        },
-        'lr_inner_ml': 0.01,
-        'num_steps_ml': 5,
-        'num_steps_validation': 5,
-        'save_after_epochs': 3,
-    }
+    omniglot_database = OmniglotDatabase(
+        random_seed=-1,
+        num_train_classes=1200,
+        num_val_classes=100,
+    )
 
-    maml = ModelAgnosticMetaLearningModel(config)
-    # maml.train(epochs=100)
-    maml.evaluate(iterations=50)
+    maml = ModelAgnosticMetaLearningModel(
+        database=omniglot_database,
+        network_cls=SimpleModel,
+        n=5,
+        k=1,
+        meta_batch_size=32,
+        num_steps_ml=5,
+        lr_inner_ml=0.01,
+        num_steps_validation=5,
+        save_after_epochs=3,
+    )
+
+    maml.train(epochs=5)
+

@@ -1,5 +1,5 @@
 .idea/*
-__pycache__/*
+*.pyc
 data/*
 logs/*
 saved_models/*
