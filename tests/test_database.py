@@ -19,77 +19,84 @@ class TestOmniglotDatabase(unittest.TestCase):
             {
                 'num_train_classes': 1200,
                 'num_val_classes': 100,
-                'train_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 5
-                },
-                'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1, 'reshuffle_each_iteration': False
-                },
-                'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1
-                },
+                'n': 6,
+                'k': 4,
+                'meta_batch_size': 5
             },
             {
                 'num_train_classes': 1200,
                 'num_val_classes': 100,
-                'train_dataset_kwargs': {
-                    'n': 650, 'k': 4, 'meta_batch_size': 1
-                },
-                'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1, 'reshuffle_each_iteration': False
-                },
-                'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1
-                },
+                'n': 650,
+                'k': 4,
+                'meta_batch_size': 1
             },
             {
                 'num_train_classes': 1200,
                 'num_val_classes': 100,
-                'train_dataset_kwargs': {
-                    'n': 7, 'k': 4, 'meta_batch_size': 600
-                },
-                'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1, 'reshuffle_each_iteration': False
-                },
-                'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1
-                },
+                'n': 7,
+                'k': 4,
+                'meta_batch_size': 600
             },
             {
                 'num_train_classes': 1200,
                 'num_val_classes': 100,
-                'train_dataset_kwargs': {
-                    'n': 7, 'k': 4, 'meta_batch_size': 11
-                },
-                'val_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1, 'reshuffle_each_iteration': False
-                },
-                'test_dataset_kwargs': {
-                    'n': 6, 'k': 4, 'meta_batch_size': 1
-                },
+                'n': 7,
+                'k': 4,
+                'meta_batch_size': 11
+            },
+            {
+                'num_train_classes': 854,
+                'num_val_classes': 63,
+                'n': 7,
+                'k': 4,
+                'meta_batch_size': 11
             },
         ]
-    
+
+    def get_dataset(
+        self,
+        random_seed,
+        num_train_classes,
+        num_val_classes,
+        n,
+        k,
+        mbs, one_hot_labels=True,
+        reshuffle_each_iteration=True
+    ):
+        db = OmniglotDatabase(
+            random_seed=random_seed,
+            num_train_classes=num_train_classes,
+            num_val_classes=num_val_classes
+        )
+        ds = db.get_supervised_meta_learning_dataset(
+            db.train_folders,
+            n=n,
+            k=k,
+            meta_batch_size=mbs,
+            one_hot_labels=one_hot_labels,
+            reshuffle_each_iteration=reshuffle_each_iteration
+        )
+        return db, ds
+
     def test_raise_exception_when_k_is_too_large(self):
-        config = {
-            'num_train_classes': 1200,
-            'num_val_classes': 100,
-            'train_dataset_kwargs': {
-                'n': 7, 'k': 12, 'meta_batch_size': 3
-            },
-            'val_dataset_kwargs': {
-                'n': 6, 'k': 4, 'meta_batch_size': 3
-            },
-            'test_dataset_kwargs': {
-                'n': 6, 'k': 4, 'meta_batch_size': 3
-            },
-        }
-        with self.assertRaises(Exception):
-            OmniglotDatabase(random_seed=1, config=config)
+        with self.assertRaises(Exception) as cm:
+            self.get_dataset(
+                random_seed=1,
+                num_train_classes=1200,
+                num_val_classes=100,
+                n=7,
+                k=12,
+                mbs=3
+            )
+        self.assertTrue(cm.exception.__str__().startswith('The number of '))
 
     def test_train_val_test_folders_are_separate(self):
         for config in self.configs:
-            database = OmniglotDatabase(random_seed=1, config=config)
+            database = OmniglotDatabase(
+                random_seed=1,
+                num_train_classes=config['num_train_classes'],
+                num_val_classes=config['num_val_classes']
+            )
             train_folders = set(database.train_folders)
             val_folders = set(database.val_folders)
             test_folders = set(database.test_folders)
@@ -105,10 +112,17 @@ class TestOmniglotDatabase(unittest.TestCase):
             for folder in test_folders:
                 self.assertNotIn(folder, train_folders)
                 self.assertNotIn(folder, val_folders)
-    
+
+            self.assertEqual(len(train_folders), config['num_train_classes'])
+            self.assertEqual(len(val_folders), config['num_val_classes'])
+
     def test_train_val_test_folders_are_comprehensive(self):
         for config in self.configs:
-            database = OmniglotDatabase(random_seed=1, config=config)
+            database = OmniglotDatabase(
+                random_seed=1,
+                num_train_classes=config['num_train_classes'],
+                num_val_classes=config['num_val_classes']
+            )
 
             all_folders = [
                 os.path.join(
@@ -124,63 +138,67 @@ class TestOmniglotDatabase(unittest.TestCase):
     def test_covering_all_classes_in_one_epoch(self, mocked_parse_function):
         # Make a new database so that the number of classes are dividable by the number of meta batches * n.
         mocked_parse_function.return_value = self.parse_function
-        config = copy.copy(self.configs[0])
-        config['train_dataset_kwargs'] = {'n': 6, 'k': 4, 'meta_batch_size': 4}
-        database = OmniglotDatabase(random_seed=1, config=config)
-
+        db, ds = self.get_dataset(1, 1200, 100, 6, 4, 4)
         # Check for covering all classes
         classes = set()
-        for task_meta_batch, labels_meta_batch in database.train_ds:
+        for task_meta_batch, labels_meta_batch in ds:
             for task in task_meta_batch:
                 train_ds, val_ds = tf.split(task, num_or_size_splits=2)
                 train_ds = tf.squeeze(train_ds, axis=0)
-                for class_instances in tf.split(train_ds, num_or_size_splits=config['train_dataset_kwargs']['n']):
+                for class_instances in tf.split(train_ds, num_or_size_splits=6):
                     class_instances = tf.squeeze(class_instances, axis=0)
                     class_instance_address = class_instances[0].numpy().decode('utf-8')
                     class_address = os.path.split(class_instance_address)[0]
                     classes.add(class_address)
-        
-        self.assertSetEqual(classes, set(database.train_folders))
+
+        self.assertSetEqual(classes, set(db.train_folders))
 
     @patch('tf_datasets.OmniglotDatabase._get_parse_function')
     def test_covering_all_classes_in_subsequent_epochs(self, mocked_parse_function):
         # This test might not pass because of the random selection of classes at the beginning of the class, but the
         # chances are low.  Specially if we increase the number of epochs, the chance of not covering classes will
         # decrease. Make a new database so that the number of classes are dividable by the number of meta batches * n.
+        # This test should always fail with num_epochs = 1
         num_epochs = 3
         mocked_parse_function.return_value = self.parse_function
-        config = copy.copy(self.configs[0])
-        config['train_dataset_kwargs'] = {'n': 7, 'k': 4, 'meta_batch_size': 4}
-        database = OmniglotDatabase(random_seed=1, config=config)
-
+        n = 7
+        db, ds = self.get_dataset(1, 1200, 100, n, 4, 4)
         # Check for covering all classes
         classes = set()
         for epoch in range(num_epochs):
-            for task_meta_batch, labels_meta_batch in database.train_ds:
+            for task_meta_batch, labels_meta_batch in ds:
                 for task in task_meta_batch:
                     train_ds, val_ds = tf.split(task, num_or_size_splits=2)
                     train_ds = tf.squeeze(train_ds, axis=0)
-                    for class_instances in tf.split(train_ds, num_or_size_splits=config['train_dataset_kwargs']['n']):
+                    for class_instances in tf.split(train_ds, num_or_size_splits=n):
                         class_instances = tf.squeeze(class_instances, axis=0)
                         class_instance_address = class_instances[0].numpy().decode('utf-8')
                         class_address = os.path.split(class_instance_address)[0]
                         classes.add(class_address)
         
-        self.assertSetEqual(classes, set(database.train_folders))
+        self.assertSetEqual(classes, set(db.train_folders))
 
     @patch('tf_datasets.OmniglotDatabase._get_parse_function')
     def test_labels_are_correct_in_train_and_val_for_every_task(self, mocked_parse_function):
         mocked_parse_function.return_value = self.parse_function
         for config in self.configs:
             config = copy.copy(config)
-            config['train_dataset_kwargs']['one_hot_labels'] = False
-            database = OmniglotDatabase(random_seed=1, config=config)
-            n = config['train_dataset_kwargs']['n']
-            k = config['train_dataset_kwargs']['k']
-            mbs = config['train_dataset_kwargs']['meta_batch_size']
+
+            n = config['n']
+            k = config['k']
+            mbs = config['meta_batch_size']
+            db, ds = self.get_dataset(
+                1,
+                config['num_train_classes'],
+                config['num_val_classes'],
+                n=n,
+                k=k,
+                mbs=mbs,
+                one_hot_labels=False
+            )
 
             for epoch in range(2):
-                for task_meta_batch, labels_meta_batch in database.train_ds:
+                for task_meta_batch, labels_meta_batch in ds:
 
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
@@ -219,24 +237,28 @@ class TestOmniglotDatabase(unittest.TestCase):
     def test_train_and_val_have_different_samples_in_every_task(self, mocked_parse_function):
         mocked_parse_function.return_value = self.parse_function
         for config in self.configs:
-            database = OmniglotDatabase(random_seed=1, config=config)
-            n = config['train_dataset_kwargs']['n']
-            k = config['train_dataset_kwargs']['k']
-            mbs = config['train_dataset_kwargs']['meta_batch_size']
+            n = config['n']
+            k = config['k']
+            mbs = config['meta_batch_size']
+            db, ds = self.get_dataset(
+                1,
+                config['num_train_classes'],
+                config['num_val_classes'],
+                n=n,
+                k=k,
+                mbs=mbs,
+            )
 
             for epoch in range(4):
-                for task_meta_batch, labels_meta_batch in database.train_ds:
+                for task_meta_batch, labels_meta_batch in ds:
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
                         task_labels = labels_meta_batch[task_index, ...]
 
                         train_ds, val_ds = tf.split(task, num_or_size_splits=2)
-                        train_labels, val_labels = tf.split(task_labels, num_or_size_splits=2)
 
                         train_ds = tf.squeeze(train_ds, axis=0)
                         val_ds = tf.squeeze(val_ds, axis=0)
-                        train_labels = tf.squeeze(train_labels, axis=0)
-                        val_labels = tf.squeeze(val_labels, axis=0)
 
                         class_instances_dict = dict()
 
@@ -245,7 +267,7 @@ class TestOmniglotDatabase(unittest.TestCase):
                                 instance_name = train_ds[class_index, instance_index, ...]
 
                                 class_name, instance_name = os.path.split(instance_name.numpy().decode('utf-8'))
-                                if not class_name in class_instances_dict:
+                                if class_name not in class_instances_dict:
                                     class_instances_dict[class_name] = set()
 
                                 class_instances_dict[class_name].add(instance_name)
@@ -261,25 +283,29 @@ class TestOmniglotDatabase(unittest.TestCase):
     def test_no_two_class_in_the_same_task(self, mocked_parse_function):
         mocked_parse_function.return_value = self.parse_function
         for config in self.configs:
-            database = OmniglotDatabase(random_seed=1, config=config)
-            n = config['train_dataset_kwargs']['n']
-            k = config['train_dataset_kwargs']['k']
-            mbs = config['train_dataset_kwargs']['meta_batch_size']
+            n = config['n']
+            k = config['k']
+            mbs = config['meta_batch_size']
+
+            db, ds = self.get_dataset(
+                1,
+                config['num_train_classes'],
+                config['num_val_classes'],
+                n=n,
+                k=k,
+                mbs=mbs,
+            )
 
             for epoch in range(4):
-                for task_meta_batch, labels_meta_batch in database.train_ds:
+                for task_meta_batch, labels_meta_batch in ds:
 
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
                         task_labels = labels_meta_batch[task_index, ...]
 
                         train_ds, val_ds = tf.split(task, num_or_size_splits=2)
-                        train_labels, val_labels = tf.split(task_labels, num_or_size_splits=2)
 
                         train_ds = tf.squeeze(train_ds, axis=0)
-                        val_ds = tf.squeeze(val_ds, axis=0)
-                        train_labels = tf.squeeze(train_labels, axis=0)
-                        val_labels = tf.squeeze(val_labels, axis=0)
 
                         classes = dict()
 
@@ -299,29 +325,33 @@ class TestOmniglotDatabase(unittest.TestCase):
         #  does not work properly. Maybe from one task in two different times the same train and val data will be selected
         mocked_parse_function.return_value = self.parse_function
         for config in self.configs:
-            database = OmniglotDatabase(random_seed=2, config=config)
-            n = config['train_dataset_kwargs']['n']
-            k = config['train_dataset_kwargs']['k']
-            mbs = config['train_dataset_kwargs']['meta_batch_size']
+            n = config['n']
+            k = config['k']
+            mbs = config['meta_batch_size']
+
+            db, ds = self.get_dataset(
+                2,
+                config['num_train_classes'],
+                config['num_val_classes'],
+                n=n,
+                k=k,
+                mbs=mbs,
+            )
 
             class_instances = dict()
             class_instances[0] = dict()
             class_instances[1] = dict()
 
             for epoch in range(2):
-                for task_meta_batch, labels_meta_batch in database.train_ds:
+                for task_meta_batch, labels_meta_batch in ds:
 
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
                         task_labels = labels_meta_batch[task_index, ...]
 
                         train_ds, val_ds = tf.split(task, num_or_size_splits=2)
-                        train_labels, val_labels = tf.split(task_labels, num_or_size_splits=2)
 
                         train_ds = tf.squeeze(train_ds, axis=0)
-                        val_ds = tf.squeeze(val_ds, axis=0)
-                        train_labels = tf.squeeze(train_labels, axis=0)
-                        val_labels = tf.squeeze(val_labels, axis=0)
 
                         for class_index in range(n):
                             for instance_index in range(k):
@@ -339,18 +369,26 @@ class TestOmniglotDatabase(unittest.TestCase):
                 self.assertNotEqual(0, first_epoch_class_instances[class_name].difference(second_epoch_class_instances[class_name]))
 
     @patch('tf_datasets.OmniglotDatabase._get_parse_function')
-    def test_validation_dataset_will_repeat(self, mocked_parse_function):
+    def test_reshuffle_each_iteration_dataset_will_repeat(self, mocked_parse_function):
         mocked_parse_function.return_value = self.parse_function
         for config in self.configs:
-            database = OmniglotDatabase(random_seed=2, config=config)
-            n = config['val_dataset_kwargs']['n']
-            k = config['val_dataset_kwargs']['k']
-            mbs = config['val_dataset_kwargs']['meta_batch_size']
+            n = config['n']
+            k = config['k']
+            mbs = config['meta_batch_size']
 
+            db, ds = self.get_dataset(
+                2,
+                config['num_train_classes'],
+                config['num_val_classes'],
+                n=n,
+                k=k,
+                mbs=mbs,
+                reshuffle_each_iteration=False
+            )
             class_names_queue = deque()
 
             for epoch in range(2):
-                for task_meta_batch, labels_meta_batch in database.val_ds:
+                for task_meta_batch, labels_meta_batch in ds:
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
                         task_labels = labels_meta_batch[task_index, ...]

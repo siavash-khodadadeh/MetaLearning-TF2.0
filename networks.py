@@ -44,13 +44,13 @@ class MiniImagenetModel(tf.keras.Model):
 
     def __init__(self, num_classes):
         super(MiniImagenetModel, self).__init__(name='mini_imagenet_model')
-        self.conv1 = tf.keras.layers.Conv2D(64, 3, name='conv1')
+        self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
         self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
-        self.conv2 = tf.keras.layers.Conv2D(64, 3, name='conv2')
+        self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
         self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
-        self.conv3 = tf.keras.layers.Conv2D(64, 3, name='conv3')
+        self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
         self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
-        self.conv4 = tf.keras.layers.Conv2D(64, 3, name='conv4')
+        self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
         self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
         self.flatten = Flatten(name='flatten')
         self.dense = Dense(num_classes, activation=None, name='dense')

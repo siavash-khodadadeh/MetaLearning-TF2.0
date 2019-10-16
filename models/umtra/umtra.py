@@ -3,8 +3,8 @@ import os
 import tensorflow as tf
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from networks import SimpleModel
-from tf_datasets import OmniglotDatabase
+from networks import SimpleModel, MiniImagenetModel
+from tf_datasets import OmniglotDatabase, MiniImagenetDatabase
 
 
 class UMTRA(ModelAgnosticMetaLearningModel):
@@ -52,21 +52,21 @@ class UMTRA(ModelAgnosticMetaLearningModel):
                f'k-{self.k}_' \
                f'stp-{self.num_steps_ml}'
 
-
-if __name__ == '__main__':
+def run_omniglot():
     omniglot_database = OmniglotDatabase(
         random_seed=-1,
         num_train_classes=1200,
         num_val_classes=100,
     )
 
+    @tf.function
     def augment(images):
         result = list()
-        for image in images:
-            image = tf.image.flip_left_right(image)
+        for i in range(images.shape[0]):
+            image = tf.image.flip_left_right(images[i, ...])
             result.append(image)
 
-        return tf.stack(images)
+        return tf.stack(result)
 
     umtra = UMTRA(
         database=omniglot_database,
@@ -81,3 +81,34 @@ if __name__ == '__main__':
     )
 
     umtra.train(epochs=5)
+
+
+def run_mini_imagenet():
+    mini_imagenet_database = MiniImagenetDatabase(random_seed=-1)
+
+    @tf.function
+    def augment(images):
+        result = list()
+        for i in range(images.shape[0]):
+            image = tf.image.flip_left_right(images[i, ...])
+            result.append(image)
+
+        return tf.stack(result)
+
+    umtra = UMTRA(
+        database=mini_imagenet_database,
+        network_cls=MiniImagenetModel,
+        n=5,
+        meta_batch_size=8,
+        num_steps_ml=5,
+        lr_inner_ml=0.01,
+        num_steps_validation=5,
+        save_after_epochs=20,
+        augmentation_function=augment
+    )
+
+    umtra.train(epochs=100)
+
+
+if __name__ == '__main__':
+    run_mini_imagenet()

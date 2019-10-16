@@ -75,6 +75,11 @@ class Database(ABC):
             one_hot_labels=True,
             reshuffle_each_iteration=True,
     ):
+        for class_name in folders:
+            assert(len(os.listdir(class_name)) > 2 * k), f'The number of instances in each class should be larger ' \
+                                                         f'than {2 * k}, however, the number of instances in' \
+                                                         f' {class_name} are: {len(os.listdir(class_name))}'
+
         classes = [class_name + '/*' for class_name in folders]
         steps_per_epoch = len(classes) // n // meta_batch_size
 
@@ -189,16 +194,15 @@ class OmniglotDatabase(Database):
 
 
 class MiniImagenetDatabase(Database):
+    def get_input_shape(self):
+        return 84, 84, 3
+
     def __init__(self, random_seed=-1, config=None):
         super(MiniImagenetDatabase, self).__init__(
             settings.MINI_IMAGENET_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/mini-imagenet'),
             random_seed=random_seed,
-            config=config
         )
-
-    def get_input_shape(self):
-        return 84, 84, 3
 
     def get_train_val_test_folders(self):
         dataset_folders = list()
@@ -216,7 +220,7 @@ class MiniImagenetDatabase(Database):
             image = tf.image.resize(image, (84, 84))
             image = tf.cast(image, tf.float32)
 
-            return 1 - (image / 255.)
+            return image / 255.
         return parse_function
 
     def prepare_database(self):

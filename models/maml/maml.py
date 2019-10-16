@@ -12,10 +12,12 @@ import settings
 
 
 # TODO
-# Visualize the training images every now and then to see if it seems correct. Especially useful for umtra
+# Train and get reasonable results to make sure that the implementation does not have any bugs.
+
 # Visualize all validation tasks just once.
 
-# Fix tests and add tests for umtra
+
+# Fix tests and add tests for UMTRA.
 
 # Test visualization could be done on all images or some of them
 # Train visualization could be done after some iterations.
@@ -37,6 +39,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         lr_inner_ml,
         num_steps_validation,
         save_after_epochs,
+        meta_learning_rate,
+        log_train_images_after_iteration  # Set to -1 if you do not want to log train images.
     ):
         self.n = n
         self.k = k
@@ -45,15 +49,16 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.lr_inner_ml = lr_inner_ml
         self.num_steps_validation = num_steps_validation
         self.save_after_epochs = save_after_epochs
+        self.log_train_images_after_iteration = log_train_images_after_iteration
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
         self.model = self.network_cls(num_classes=self.n)
-        self.model.predict(
-            tf.zeros(shape=(n * k, *self.database.input_shape)))
+        self.model(tf.zeros(shape=(n * k, *self.database.input_shape)))
+
         self.updated_model = self.network_cls(num_classes=self.n)
         self.updated_model(tf.zeros(shape=(n * k, *self.database.input_shape)))
 
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=meta_learning_rate)
         self.val_accuracy_metric = tf.metrics.Accuracy()
         self.val_loss_metric = tf.metrics.Mean()
 
@@ -191,6 +196,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             print('No previous checkpoint found!')
 
     def evaluate(self, iterations):
+        self.test_dataset = self.get_test_dataset()
         self.load_model()
         test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
         test_summary_writer = tf.summary.create_file_writer(test_log_dir)
@@ -213,19 +219,20 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
 
     def log_images(self, summary_writer, train_ds, val_ds, step):
-        with summary_writer.as_default():
-            tf.summary.image(
-                'train',
-                train_ds,
-                step=step,
-                max_outputs=5
-            )
-            tf.summary.image(
-                'validation',
-                val_ds,
-                step=step,
-                max_outputs=5
-            )
+        with tf.device('cpu:0'):
+            with summary_writer.as_default():
+                tf.summary.image(
+                    'train',
+                    train_ds,
+                    step=step,
+                    max_outputs=5
+                )
+                tf.summary.image(
+                    'validation',
+                    val_ds,
+                    step=step,
+                    max_outputs=5
+                )
 
     def update_loss_and_accuracy(self, logits, labels, loss_metric, accuracy_metric):
         print(tf.argmax(logits, axis=-1))
@@ -267,12 +274,46 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
 
+    @tf.function
+    def get_gradients_of_tasks_batch(self, inputs):
+        task, labels, iteration_count = inputs
+
+        train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
+
+        if self.log_train_images_after_iteration != -1 and \
+                iteration_count % self.log_train_images_after_iteration == 0:
+
+            self.log_images(self.train_summary_writer, train_ds, val_ds, step=iteration_count)
+
+            with tf.device('cpu:0'):
+                with self.train_summary_writer.as_default():
+                    for var in self.model.variables:
+                        tf.summary.histogram(var.name, var, step=iteration_count)
+                    for var in self.updated_model.variables:
+                        tf.summary.histogram('updated_model' + var.name, var, step=iteration_count)
+
+        with tf.GradientTape(persistent=True) as val_tape:
+            updated_model = self.inner_train_loop(train_ds, train_labels, self.num_steps_ml)
+            updated_model_logits = updated_model(val_ds, training=False)
+            val_loss = tf.reduce_sum(
+                tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
+            )
+            self.train_loss_metric.update_state(val_loss)
+            self.train_accuracy_metric.update_state(
+                tf.argmax(val_labels, axis=-1),
+                tf.argmax(updated_model_logits, axis=-1)
+            )
+        val_gradients = val_tape.gradient(val_loss, self.model.trainable_variables)
+        return val_gradients
+
     def train(self, epochs=5):
+        self.train_dataset = self.get_train_dataset()
+        self.val_dataset = self.get_val_dataset()
         self.load_model()
-        epoch_count = -1
-        counter = 0
+        iteration_count = 0
 
         pbar = tqdm(self.train_dataset)
+
         for epoch_count in range(epochs):
             self.report_validation_loss_and_accuracy(epoch_count)
             if epoch_count != 0:
@@ -290,40 +331,31 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 self.save_model(epoch_count)
 
             for tasks_meta_batch, labels_meta_batch in self.train_dataset:
-                tasks_final_gradients = list()
-
-                for task, labels in zip(tasks_meta_batch, labels_meta_batch):
-                    train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
-
-                    with tf.GradientTape(persistent=True) as val_tape:
-                        updated_model = self.inner_train_loop(train_ds, train_labels, self.num_steps_ml)
-                        updated_model_logits = updated_model(val_ds, training=False)
-                        val_loss = tf.reduce_sum(
-                            tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
-                        )
-                        self.train_loss_metric.update_state(val_loss)
-                        self.train_accuracy_metric.update_state(
-                            tf.argmax(val_labels, axis=-1),
-                            tf.argmax(updated_model_logits, axis=-1)
-                        )
-
-                    val_gradients = val_tape.gradient(val_loss, self.model.trainable_variables)
-                    tasks_final_gradients.append(val_gradients)
+                tasks_final_gradients = tf.map_fn(
+                    self.get_gradients_of_tasks_batch,
+                    elems=(
+                        tasks_meta_batch,
+                        labels_meta_batch,
+                        tf.cast(tf.ones(tasks_meta_batch.shape[0], 1) * iteration_count, tf.int64)
+                    ),
+                    dtype=[tf.float32] * 14,
+                    parallel_iterations=tasks_meta_batch.shape[0]
+                )
 
                 final_gradients = average_gradients(tasks_final_gradients)
                 self.optimizer.apply_gradients(zip(final_gradients, self.model.trainable_variables))
-                counter += 1
+                iteration_count += 1
                 pbar.set_description_str('Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
-                    counter,
+                    iteration_count,
                     self.train_loss_metric.result().numpy(),
                     self.train_accuracy_metric.result().numpy()
                 ))
                 pbar.update(1)
 
 
-if __name__ == '__main__':
+def run_omniglot():
     omniglot_database = OmniglotDatabase(
-        random_seed=-1,
+        random_seed=47,
         num_train_classes=1200,
         num_val_classes=100,
     )
@@ -333,12 +365,39 @@ if __name__ == '__main__':
         network_cls=SimpleModel,
         n=5,
         k=1,
-        meta_batch_size=32,
-        num_steps_ml=5,
-        lr_inner_ml=0.01,
-        num_steps_validation=5,
-        save_after_epochs=3,
+        meta_batch_size=4,
+        num_steps_ml=1,
+        lr_inner_ml=0.4,
+        num_steps_validation=1,
+        save_after_epochs=50,
+        meta_learning_rate=0.001,
+        log_train_images_after_iteration=-1
     )
 
-    maml.train(epochs=5)
+    maml.train(epochs=1000)
+    # maml.evaluate(iterations=50)
 
+
+def run_mini_imagenet():
+    mini_imagenet_database = MiniImagenetDatabase(random_seed=-1)
+
+    maml = ModelAgnosticMetaLearningModel(
+        database=mini_imagenet_database,
+        network_cls=MiniImagenetModel,
+        n=5,
+        k=1,
+        meta_batch_size=8,
+        num_steps_ml=5,
+        lr_inner_ml=0.05,
+        num_steps_validation=5,
+        save_after_epochs=20,
+        meta_learning_rate=0.0001,
+        log_train_images_after_iteration=-1
+    )
+
+    maml.train(epochs=100)
+    # maml.evaluate(50)
+
+
+if __name__ == '__main__':
+    run_omniglot()
