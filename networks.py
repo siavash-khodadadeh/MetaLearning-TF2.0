@@ -10,13 +10,13 @@ class SimpleModel(tf.keras.Model):
     def __init__(self, num_classes):
         super(SimpleModel, self).__init__(name='simple_model')
 
-        self.conv1 = tf.keras.layers.Conv2D(64, 3, name='conv1')
+        self.conv1 = tf.keras.layers.Conv2D(64, 3, name='conv1', strides=(2, 2), padding='same')
         self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
-        self.conv2 = tf.keras.layers.Conv2D(64, 3, name='conv2')
+        self.conv2 = tf.keras.layers.Conv2D(64, 3, name='conv2', strides=(2, 2), padding='same')
         self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
-        self.conv3 = tf.keras.layers.Conv2D(64, 3, name='conv3')
+        self.conv3 = tf.keras.layers.Conv2D(64, 3, name='conv3', strides=(2, 2), padding='same')
         self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
-        self.conv4 = tf.keras.layers.Conv2D(64, 3, name='conv4')
+        self.conv4 = tf.keras.layers.Conv2D(64, 3, name='conv4',  strides=(2, 2), padding='same')
         self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
         self.flatten = Flatten(name='flatten')
         self.dense = Dense(num_classes, activation=None, name='dense')

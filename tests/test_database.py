@@ -253,7 +253,6 @@ class TestOmniglotDatabase(unittest.TestCase):
                 for task_meta_batch, labels_meta_batch in ds:
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
-                        task_labels = labels_meta_batch[task_index, ...]
 
                         train_ds, val_ds = tf.split(task, num_or_size_splits=2)
 
@@ -301,7 +300,6 @@ class TestOmniglotDatabase(unittest.TestCase):
 
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
-                        task_labels = labels_meta_batch[task_index, ...]
 
                         train_ds, val_ds = tf.split(task, num_or_size_splits=2)
 
@@ -347,7 +345,6 @@ class TestOmniglotDatabase(unittest.TestCase):
 
                     for task_index in range(mbs):
                         task = task_meta_batch[task_index, ...]
-                        task_labels = labels_meta_batch[task_index, ...]
 
                         train_ds, val_ds = tf.split(task, num_or_size_splits=2)
 

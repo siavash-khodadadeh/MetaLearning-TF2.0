@@ -87,8 +87,13 @@ class Database(ABC):
 
         dataset = tf.data.Dataset.from_tensor_slices(classes)
         dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.interleave(self._get_instances(k), cycle_length=n, block_length=k)
-        dataset = dataset.map(self._get_parse_function())
+        dataset = dataset.interleave(
+            self._get_instances(k),
+            cycle_length=n,
+            block_length=k,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
         

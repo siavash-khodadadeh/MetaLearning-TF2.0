@@ -77,12 +77,16 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return os.path.dirname(__file__)
 
     def get_train_dataset(self):
-        return self.database.get_supervised_meta_learning_dataset(
+        dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.train_folders,
             n=self.n,
             k=self.k,
             meta_batch_size=self.meta_batch_size
         )
+        # steps_per_epoch = dataset.steps_per_epoch
+        # dataset = dataset.prefetch(1)
+        # setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+        return dataset
 
     def get_val_dataset(self):
         return self.database.get_supervised_meta_learning_dataset(
@@ -161,43 +165,55 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return train_ds, val_ds, train_labels, val_labels
 
-    def inner_train_loop(self, train_ds, train_labels, num_iterations):
-        gradients = list()
-        for variable in self.model.trainable_variables:
-            gradients.append(tf.zeros_like(variable))
+    def inner_train_loop(self, train_ds, train_labels, num_iterations, is_meta_training=True):
+        if is_meta_training:
+            updated_models =
+        else:
+            gradients = list()
+            for variable in self.model.trainable_variables:
+                gradients.append(tf.zeros_like(variable))
 
-        updated_model = self.create_meta_model(self.model, gradients)
-        for k in range(num_iterations):
-            with tf.GradientTape(persistent=True) as train_tape:
-                train_tape.watch(updated_model.meta_trainable_variables)
-                logits = updated_model(train_ds, training=True)
-                loss = tf.reduce_sum(
-                    tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
-                )
+            updated_model = self.create_meta_model(self.model, gradients)
+            for k in range(num_iterations):
+                with tf.GradientTape(persistent=True) as train_tape:
+                    train_tape.watch(updated_model.meta_trainable_variables)
+                    logits = updated_model(train_ds, training=True)
+                    loss = tf.reduce_sum(
+                        tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
+                    )
 
-            gradients = train_tape.gradient(loss, updated_model.meta_trainable_variables)
-            updated_model = self.create_meta_model(updated_model, gradients)
+                gradients = train_tape.gradient(loss, updated_model.meta_trainable_variables)
+                updated_model = self.create_meta_model(updated_model, gradients)
 
-        return updated_model
+            return updated_model
 
     def save_model(self, epochs):
         self.model.save_weights(os.path.join(self.checkpoint_dir, f'model.ckpt-{epochs}'))
 
     def load_model(self, epochs=None):
+        epoch_count = 0
         if epochs is not None:
             checkpoint_path = os.path.join(self.checkpoint_dir, f'model.ckpt-{epochs}')
+            epoch_count = epochs
         else:
             checkpoint_path = tf.train.latest_checkpoint(self.checkpoint_dir)
 
         if checkpoint_path is not None:
-            print('==================\nResuming Training\n==================')
-            self.model.load_weights(checkpoint_path)
+            try:
+                self.model.load_weights(checkpoint_path)
+                print('==================\nResuming Training\n==================')
+                epoch_count = int(checkpoint_path[checkpoint_path.rindex('-') + 1:])
+            except Exception as e:
+                print('Could not load the previous checkpoint!')
+
         else:
             print('No previous checkpoint found!')
 
-    def evaluate(self, iterations):
+        return epoch_count
+
+    def evaluate(self, iterations, epochs_to_load_from=None):
         self.test_dataset = self.get_test_dataset()
-        self.load_model()
+        self.load_model(epochs=epochs_to_load_from)
         test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
         test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
@@ -309,26 +325,28 @@ class ModelAgnosticMetaLearningModel(BaseModel):
     def train(self, epochs=5):
         self.train_dataset = self.get_train_dataset()
         self.val_dataset = self.get_val_dataset()
-        self.load_model()
-        iteration_count = 0
+        start_epoch = self.load_model()
+        iteration_count = start_epoch * self.train_dataset.steps_per_epoch
 
         pbar = tqdm(self.train_dataset)
 
-        for epoch_count in range(epochs):
-            self.report_validation_loss_and_accuracy(epoch_count)
+        for epoch_count in range(start_epoch, epochs):
             if epoch_count != 0:
-                print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
-                print('Train Accuracy: {}'.format(self.train_accuracy_metric.result().numpy()))
+                if epoch_count % 50 == 0:
+                    self.report_validation_loss_and_accuracy(epoch_count)
+                    if epoch_count != 0:
+                        print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
+                        print('Train Accuracy: {}'.format(self.train_accuracy_metric.result().numpy()))
 
                 with self.train_summary_writer.as_default():
                     tf.summary.scalar('Loss', self.train_loss_metric.result(), step=epoch_count)
                     tf.summary.scalar('Accuracy', self.train_accuracy_metric.result(), step=epoch_count)
 
+                if epoch_count % self.save_after_epochs == 0:
+                    self.save_model(epoch_count)
+
             self.train_accuracy_metric.reset_states()
             self.train_loss_metric.reset_states()
-
-            if epoch_count != 0 and epoch_count % self.save_after_epochs == 0:
-                self.save_model(epoch_count)
 
             for tasks_meta_batch, labels_meta_batch in self.train_dataset:
                 tasks_final_gradients = tf.map_fn(
@@ -345,7 +363,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 final_gradients = average_gradients(tasks_final_gradients)
                 self.optimizer.apply_gradients(zip(final_gradients, self.model.trainable_variables))
                 iteration_count += 1
-                pbar.set_description_str('Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
+                pbar.set_description_str('Epoch{}, Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
+                    epoch_count,
                     iteration_count,
                     self.train_loss_metric.result().numpy(),
                     self.train_accuracy_metric.result().numpy()
@@ -365,16 +384,16 @@ def run_omniglot():
         network_cls=SimpleModel,
         n=5,
         k=1,
-        meta_batch_size=4,
-        num_steps_ml=1,
+        meta_batch_size=32,
+        num_steps_ml=10,
         lr_inner_ml=0.4,
-        num_steps_validation=1,
+        num_steps_validation=10,
         save_after_epochs=50,
         meta_learning_rate=0.001,
         log_train_images_after_iteration=-1
     )
 
-    maml.train(epochs=1000)
+    maml.train(epochs=4000)
     # maml.evaluate(iterations=50)
 
 

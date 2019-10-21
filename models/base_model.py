@@ -14,7 +14,7 @@ class BaseModel(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self):
+    def evaluate(self, iterations):
         pass
 
     @abstractmethod
