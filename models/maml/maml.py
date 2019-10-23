@@ -55,8 +55,11 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.model = self.network_cls(num_classes=self.n)
         self.model(tf.zeros(shape=(n * k, *self.database.input_shape)))
 
-        self.updated_model = self.network_cls(num_classes=self.n)
-        self.updated_model(tf.zeros(shape=(n * k, *self.database.input_shape)))
+        self.updated_models = list()
+        for _ in range(self.num_steps_ml + 1):
+            updated_model = self.network_cls(num_classes=self.n)
+            updated_model(tf.zeros(shape=(n * k, *self.database.input_shape)))
+            self.updated_models.append(updated_model)
 
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=meta_learning_rate)
         self.val_accuracy_metric = tf.metrics.Accuracy()
@@ -112,38 +115,37 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                f'k-{self.k}_' \
                f'stp-{self.num_steps_ml}'
 
-    def create_meta_model(self, model, gradients):
+    def create_meta_model(self, updated_model, model, gradients):
         k = 0
         variables = list()
 
         for i in range(len(model.layers)):
             if isinstance(model.layers[i], tf.keras.layers.Conv2D) or \
              isinstance(model.layers[i], tf.keras.layers.Dense):
-                self.updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
+                updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
                 k += 1
-                variables.append(self.updated_model.layers[i].kernel)
+                variables.append(updated_model.layers[i].kernel)
 
-                self.updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
+                updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
                 k += 1
-                variables.append(self.updated_model.layers[i].bias)
+                variables.append(updated_model.layers[i].bias)
 
             elif isinstance(model.layers[i], tf.keras.layers.BatchNormalization):
                 if hasattr(model.layers[i], 'moving_mean') and model.layers[i].moving_mean is not None:
-                    self.updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
+                    updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
                 if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
-                    self.updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
+                    updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
                 if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
-                    self.updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                    updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
                     k += 1
-                    variables.append(self.updated_model.layers[i].gamma)
+                    variables.append(updated_model.layers[i].gamma)
                 if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                    self.updated_model.layers[i].beta = \
+                    updated_model.layers[i].beta = \
                         model.layers[i].beta - self.lr_inner_ml * gradients[k]
                     k += 1
-                    variables.append(self.updated_model.layers[i].beta)
+                    variables.append(updated_model.layers[i].beta)
 
-        setattr(self.updated_model, 'meta_trainable_variables', variables)
-        return self.updated_model
+        setattr(updated_model, 'meta_trainable_variables', variables)
 
     def get_train_loss_and_gradients(self, train_ds, train_labels):
         with tf.GradientTape(persistent=True) as train_tape:
@@ -165,27 +167,47 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return train_ds, val_ds, train_labels, val_labels
 
-    def inner_train_loop(self, train_ds, train_labels, num_iterations, is_meta_training=True):
-        if is_meta_training:
-            updated_models =
+    def inner_train_loop(self, train_ds, train_labels, num_iterations=-1):
+        if num_iterations == -1:
+            num_iterations = self.num_steps_ml
+
+            gradients = list()
+            for variable in self.model.trainable_variables:
+                gradients.append(tf.zeros_like(variable))
+
+            self.create_meta_model(self.updated_models[0], self.model, gradients)
+
+            for k in range(1, num_iterations + 1):
+                with tf.GradientTape(persistent=True) as train_tape:
+                    train_tape.watch(self.updated_models[k - 1].meta_trainable_variables)
+                    logits = self.updated_models[k - 1](train_ds, training=True)
+                    loss = tf.reduce_sum(
+                        tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
+                    )
+                gradients = train_tape.gradient(loss, self.updated_models[k - 1].meta_trainable_variables)
+                self.create_meta_model(self.updated_models[k], self.updated_models[k - 1], gradients)
+
+            return self.updated_models[-1]
+
         else:
             gradients = list()
             for variable in self.model.trainable_variables:
                 gradients.append(tf.zeros_like(variable))
 
-            updated_model = self.create_meta_model(self.model, gradients)
+            self.create_meta_model(self.updated_models[0], self.model, gradients)
+            copy_model = self.updated_models[0]
+
             for k in range(num_iterations):
                 with tf.GradientTape(persistent=True) as train_tape:
-                    train_tape.watch(updated_model.meta_trainable_variables)
-                    logits = updated_model(train_ds, training=True)
+                    train_tape.watch(copy_model.meta_trainable_variables)
+                    logits = copy_model(train_ds, training=True)
                     loss = tf.reduce_sum(
                         tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
                     )
+                gradients = train_tape.gradient(loss, copy_model.meta_trainable_variables)
+                self.create_meta_model(copy_model, copy_model, gradients)
 
-                gradients = train_tape.gradient(loss, updated_model.meta_trainable_variables)
-                updated_model = self.create_meta_model(updated_model, gradients)
-
-            return updated_model
+            return copy_model
 
     def save_model(self, epochs):
         self.model.save_weights(os.path.join(self.checkpoint_dir, f'model.ckpt-{epochs}'))
@@ -291,7 +313,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
 
     @tf.function
-    def get_gradients_of_tasks_batch(self, inputs):
+    def get_losses_of_tasks_batch(self, inputs):
         task, labels, iteration_count = inputs
 
         train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
@@ -305,22 +327,41 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 with self.train_summary_writer.as_default():
                     for var in self.model.variables:
                         tf.summary.histogram(var.name, var, step=iteration_count)
-                    for var in self.updated_model.variables:
-                        tf.summary.histogram('updated_model' + var.name, var, step=iteration_count)
 
-        with tf.GradientTape(persistent=True) as val_tape:
-            updated_model = self.inner_train_loop(train_ds, train_labels, self.num_steps_ml)
-            updated_model_logits = updated_model(val_ds, training=False)
-            val_loss = tf.reduce_sum(
-                tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
+                    for k in range(len(self.updated_models)):
+                        var_count = 0
+                        if hasattr(self.updated_models[k], 'meta_trainable_variables'):
+                            for var in self.updated_models[k].meta_trainable_variables:
+                                var_count += 1
+                                tf.summary.histogram(f'updated_model_{k}_' + str(var_count), var, step=iteration_count)
+
+        updated_model = self.inner_train_loop(train_ds, train_labels, -1)
+        updated_model_logits = updated_model(val_ds, training=True)
+        val_loss = tf.reduce_sum(
+            tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
+        )
+        self.train_loss_metric.update_state(val_loss)
+        self.train_accuracy_metric.update_state(
+            tf.argmax(val_labels, axis=-1),
+            tf.argmax(updated_model_logits, axis=-1)
+        )
+        return val_loss
+
+    def meta_train_loop(self, tasks_meta_batch, labels_meta_batch, iteration_count):
+        with tf.GradientTape(persistent=True) as outer_tape:
+            tasks_final_losses = tf.map_fn(
+                self.get_losses_of_tasks_batch,
+                elems=(
+                    tasks_meta_batch,
+                    labels_meta_batch,
+                    tf.cast(tf.ones(self.meta_batch_size, 1) * iteration_count, tf.int64)
+                ),
+                dtype=tf.float32,
+                parallel_iterations=self.meta_batch_size
             )
-            self.train_loss_metric.update_state(val_loss)
-            self.train_accuracy_metric.update_state(
-                tf.argmax(val_labels, axis=-1),
-                tf.argmax(updated_model_logits, axis=-1)
-            )
-        val_gradients = val_tape.gradient(val_loss, self.model.trainable_variables)
-        return val_gradients
+            final_loss = tf.reduce_mean(tasks_final_losses)
+        outer_gradients = outer_tape.gradient(final_loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(zip(outer_gradients, self.model.trainable_variables))
 
     def train(self, epochs=5):
         self.train_dataset = self.get_train_dataset()
@@ -349,19 +390,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             self.train_loss_metric.reset_states()
 
             for tasks_meta_batch, labels_meta_batch in self.train_dataset:
-                tasks_final_gradients = tf.map_fn(
-                    self.get_gradients_of_tasks_batch,
-                    elems=(
-                        tasks_meta_batch,
-                        labels_meta_batch,
-                        tf.cast(tf.ones(tasks_meta_batch.shape[0], 1) * iteration_count, tf.int64)
-                    ),
-                    dtype=[tf.float32] * 14,
-                    parallel_iterations=tasks_meta_batch.shape[0]
-                )
-
-                final_gradients = average_gradients(tasks_final_gradients)
-                self.optimizer.apply_gradients(zip(final_gradients, self.model.trainable_variables))
+                self.meta_train_loop(tasks_meta_batch, labels_meta_batch, iteration_count)
                 iteration_count += 1
                 pbar.set_description_str('Epoch{}, Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
                     epoch_count,
@@ -410,7 +439,7 @@ def run_mini_imagenet():
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_epochs=20,
-        meta_learning_rate=0.0001,
+        meta_learning_rate=0.001,
         log_train_images_after_iteration=-1
     )
 
