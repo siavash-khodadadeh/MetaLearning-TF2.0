@@ -1,6 +1,8 @@
 import os
 
 import tensorflow as tf
+import tensorflow_addons as tfa
+import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks import SimpleModel, MiniImagenetModel
@@ -19,6 +21,7 @@ class UMTRA(ModelAgnosticMetaLearningModel):
             num_steps_validation,
             save_after_epochs,
             meta_learning_rate,
+            report_validation_frequency,
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
             augmentation_function=None
     ):
@@ -34,6 +37,7 @@ class UMTRA(ModelAgnosticMetaLearningModel):
             num_steps_validation=num_steps_validation,
             save_after_epochs=save_after_epochs,
             meta_learning_rate=meta_learning_rate,
+            report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration
         )
 
@@ -41,12 +45,14 @@ class UMTRA(ModelAgnosticMetaLearningModel):
         return os.path.dirname(__file__)
 
     def get_train_dataset(self):
-        return self.database.get_umtra_dataset(
+        dataset = self.database.get_umtra_dataset(
             self.database.train_folders,
             n=self.n,
             meta_batch_size=self.meta_batch_size,
             augmentation_function=self.augmentation_function
         )
+
+        return dataset
 
     def get_config_info(self):
         return f'umtra_' \
@@ -57,20 +63,30 @@ class UMTRA(ModelAgnosticMetaLearningModel):
                f'stp-{self.num_steps_ml}'
 
 def run_omniglot():
+    @tf.function
+    def augment(images):
+        result = list()
+        num_imgs = 1
+        for i in range(images.shape[0]):
+            image = tf.reshape(images[i], (num_imgs, 28, 28, 1))
+            random_map = tf.random.uniform(shape=tf.shape(image), minval=0, maxval=2, dtype=tf.int32)
+            random_map = tf.cast(random_map, tf.float32)
+            image = tf.minimum(image, random_map)
+
+            base_ = tf.convert_to_tensor(np.tile([1, 0, 0, 0, 1, 0, 0, 0], [num_imgs, 1]), dtype=tf.float32)
+            mask_ = tf.convert_to_tensor(np.tile([0, 0, 1, 0, 0, 1, 0, 0], [num_imgs, 1]), dtype=tf.float32)
+            random_shift_ = tf.random.uniform([num_imgs, 8], minval=-6., maxval=6., dtype=tf.float32)
+            transforms_ = base_ + random_shift_ * mask_
+            augmented_data = tfa.image.transform(images=image, transforms=transforms_)
+            result.append(augmented_data)
+
+        return tf.stack(result)
+
     omniglot_database = OmniglotDatabase(
         random_seed=-1,
         num_train_classes=1200,
         num_val_classes=100,
     )
-
-    @tf.function
-    def augment(images):
-        result = list()
-        for i in range(images.shape[0]):
-            image = tf.image.flip_left_right(images[i, ...])
-            result.append(image)
-
-        return tf.stack(result)
 
     umtra = UMTRA(
         database=omniglot_database,
@@ -80,13 +96,15 @@ def run_omniglot():
         num_steps_ml=5,
         lr_inner_ml=0.01,
         num_steps_validation=5,
-        save_after_epochs=20,
+        save_after_epochs=5,
         meta_learning_rate=0.001,
-        log_train_images_after_iteration=-1,
+        log_train_images_after_iteration=10,
+        report_validation_frequency=1,
         augmentation_function=augment
     )
 
-    umtra.train(epochs=100)
+    # umtra.train(epochs=10)
+    umtra.evaluate(iterations=50)
 
 
 def run_mini_imagenet():

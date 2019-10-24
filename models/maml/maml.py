@@ -40,6 +40,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         num_steps_validation,
         save_after_epochs,
         meta_learning_rate,
+        report_validation_frequency,
         log_train_images_after_iteration  # Set to -1 if you do not want to log train images.
     ):
         self.n = n
@@ -50,6 +51,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.num_steps_validation = num_steps_validation
         self.save_after_epochs = save_after_epochs
         self.log_train_images_after_iteration = log_train_images_after_iteration
+        self.report_validation_frequency = report_validation_frequency
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
         self.model = self.network_cls(num_classes=self.n)
@@ -248,8 +250,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
                 # If you want to compare with MAML paper, please set the training=True in the following line
                 # In that paper the assumption is that we have access to all of test data together and we can evaluate
-                # mean and variance from the batch which is given
-                updated_model_logits = updated_model(val_ds, training=False)
+                # mean and variance from the batch which is given. Make sure to do the same thing in validation.
+                updated_model_logits = updated_model(val_ds, training=True)
 
                 self.update_loss_and_accuracy(updated_model_logits, val_labels, test_loss_metric, test_accuracy_metric)
 
@@ -303,7 +305,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     self.log_images(self.val_summary_writer, train_ds, val_ds, step)
 
                 updated_model = self.inner_train_loop(train_ds, train_labels, self.num_steps_validation)
-                updated_model_logits = updated_model(val_ds, training=False)
+                # If you want to compare with MAML paper, please set the training=True in the following line
+                # In that paper the assumption is that we have access to all of test data together and we can evaluate
+                # mean and variance from the batch which is given. Make sure to do the same thing in evaluation.
+                updated_model_logits = updated_model(val_ds, training=True)
 
                 self.update_loss_and_accuracy(
                     updated_model_logits, val_labels, self.val_loss_metric, self.val_accuracy_metric
@@ -376,7 +381,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         for epoch_count in range(start_epoch, epochs):
             if epoch_count != 0:
-                if epoch_count % 50 == 0:
+                if epoch_count % self.report_validation_frequency == 0:
                     self.report_validation_loss_and_accuracy(epoch_count)
                     if epoch_count != 0:
                         print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
@@ -420,13 +425,14 @@ def run_omniglot():
         num_steps_ml=10,
         lr_inner_ml=0.4,
         num_steps_validation=10,
-        save_after_epochs=50,
+        save_after_epochs=500,
         meta_learning_rate=0.001,
+        report_validation_frequency=50,
         log_train_images_after_iteration=-1
     )
 
-    # maml.train(epochs=4000)
-    maml.evaluate(iterations=50, epochs_to_load_from=500)
+    maml.train(epochs=4000)
+    # maml.evaluate(iterations=50, epochs_to_load_from=500)
 
 
 def run_mini_imagenet():
