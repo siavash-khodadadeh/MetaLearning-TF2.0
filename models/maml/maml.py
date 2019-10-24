@@ -246,6 +246,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             for task, labels in zip(tmb, lmb):
                 train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
                 updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
+                # If you want to compare with MAML paper, please set the training=True in the following line
+                # In that paper the assumption is that we have access to all of test data together and we can evaluate
+                # mean and variance from the batch which is given
                 updated_model_logits = updated_model(val_ds, training=False)
 
                 self.update_loss_and_accuracy(updated_model_logits, val_labels, test_loss_metric, test_accuracy_metric)
@@ -413,7 +416,7 @@ def run_omniglot():
         network_cls=SimpleModel,
         n=5,
         k=1,
-        meta_batch_size=32,
+        meta_batch_size=33,
         num_steps_ml=10,
         lr_inner_ml=0.4,
         num_steps_validation=10,
@@ -422,8 +425,8 @@ def run_omniglot():
         log_train_images_after_iteration=-1
     )
 
-    maml.train(epochs=4000)
-    # maml.evaluate(iterations=50)
+    # maml.train(epochs=4000)
+    maml.evaluate(iterations=50, epochs_to_load_from=500)
 
 
 def run_mini_imagenet():

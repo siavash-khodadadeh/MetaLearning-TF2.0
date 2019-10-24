@@ -18,6 +18,8 @@ class UMTRA(ModelAgnosticMetaLearningModel):
             lr_inner_ml,
             num_steps_validation,
             save_after_epochs,
+            meta_learning_rate,
+            log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
             augmentation_function=None
     ):
         self.augmentation_function = augmentation_function
@@ -31,6 +33,8 @@ class UMTRA(ModelAgnosticMetaLearningModel):
             lr_inner_ml=lr_inner_ml,
             num_steps_validation=num_steps_validation,
             save_after_epochs=save_after_epochs,
+            meta_learning_rate=meta_learning_rate,
+            log_train_images_after_iteration=log_train_images_after_iteration
         )
 
     def get_root(self):
@@ -76,11 +80,13 @@ def run_omniglot():
         num_steps_ml=5,
         lr_inner_ml=0.01,
         num_steps_validation=5,
-        save_after_epochs=3,
+        save_after_epochs=20,
+        meta_learning_rate=0.001,
+        log_train_images_after_iteration=-1,
         augmentation_function=augment
     )
 
-    umtra.train(epochs=5)
+    umtra.train(epochs=100)
 
 
 def run_mini_imagenet():
@@ -111,4 +117,4 @@ def run_mini_imagenet():
 
 
 if __name__ == '__main__':
-    run_mini_imagenet()
+    run_omniglot()
