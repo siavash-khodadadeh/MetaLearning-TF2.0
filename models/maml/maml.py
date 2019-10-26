@@ -20,9 +20,7 @@ import settings
 # Fix tests and add tests for UMTRA.
 
 # Test visualization could be done on all images or some of them
-# Train visualization could be done after some iterations.
 
-# Check if the tf.function can help with improving speed.
 # Make it possible to train on multiple GPUs (Not very necassary now), but we have to make it fast with tf.function.
 # Add evaluation without implementing the inner loop to test the correctness.
 
@@ -41,7 +39,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         save_after_epochs,
         meta_learning_rate,
         report_validation_frequency,
-        log_train_images_after_iteration  # Set to -1 if you do not want to log train images.
+        log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
+        least_number_of_tasks_val_test=-1,  # Make sure the validaiton and test dataset pick at least this many tasks.
+        clip_gradients=False
     ):
         self.n = n
         self.k = k
@@ -52,6 +52,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.save_after_epochs = save_after_epochs
         self.log_train_images_after_iteration = log_train_images_after_iteration
         self.report_validation_frequency = report_validation_frequency
+        self.least_number_of_tasks_val_test = least_number_of_tasks_val_test
+        self.clip_gradients = clip_gradients
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
         self.model = self.network_cls(num_classes=self.n)
@@ -94,21 +96,31 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return dataset
 
     def get_val_dataset(self):
-        return self.database.get_supervised_meta_learning_dataset(
+        val_dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.val_folders,
             n=self.n,
             k=self.k,
             meta_batch_size=1,
-            reshuffle_each_iteration=False
+            reshuffle_each_iteration=True
         )
+        steps_per_epoch = max(val_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
+        val_dataset = val_dataset.repeat(-1)
+        val_dataset = val_dataset.take(steps_per_epoch)
+        setattr(val_dataset, 'steps_per_epoch', steps_per_epoch)
+        return val_dataset
 
     def get_test_dataset(self):
-        return self.database.get_supervised_meta_learning_dataset(
+        test_dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.test_folders,
             n=self.n,
             k=self.k,
             meta_batch_size=1,
         )
+        steps_per_epoch = max(test_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
+        test_dataset = test_dataset.repeat(-1)
+        test_dataset = test_dataset.take(steps_per_epoch)
+        setattr(test_dataset, 'steps_per_epoch', steps_per_epoch)
+        return test_dataset
 
     def get_config_info(self):
         return f'model-{self.network_cls.name}_' \
@@ -369,6 +381,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             )
             final_loss = tf.reduce_mean(tasks_final_losses)
         outer_gradients = outer_tape.gradient(final_loss, self.model.trainable_variables)
+        if self.clip_gradients:
+            outer_gradients = [tf.clip_by_value(grad, -10, 10) for grad in outer_gradients]
         self.optimizer.apply_gradients(zip(outer_gradients, self.model.trainable_variables))
 
     def train(self, epochs=5):
@@ -421,14 +435,14 @@ def run_omniglot():
         network_cls=SimpleModel,
         n=5,
         k=1,
-        meta_batch_size=33,
+        meta_batch_size=32,
         num_steps_ml=10,
         lr_inner_ml=0.4,
         num_steps_validation=10,
         save_after_epochs=500,
         meta_learning_rate=0.001,
         report_validation_frequency=50,
-        log_train_images_after_iteration=-1
+        log_train_images_after_iteration=-1,
     )
 
     maml.train(epochs=4000)
@@ -443,18 +457,22 @@ def run_mini_imagenet():
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
-        meta_batch_size=8,
+        meta_batch_size=4,
         num_steps_ml=5,
-        lr_inner_ml=0.05,
+        lr_inner_ml=0.001,
         num_steps_validation=5,
-        save_after_epochs=20,
+        save_after_epochs=500,
         meta_learning_rate=0.001,
-        log_train_images_after_iteration=-1
+        report_validation_frequency=50,
+        log_train_images_after_iteration=1000,
+        least_number_of_tasks_val_test=50,
+        clip_gradients=True
     )
 
-    maml.train(epochs=100)
-    # maml.evaluate(50)
+    # maml.train(epochs=4000)
+    maml.evaluate(50)
 
 
 if __name__ == '__main__':
     run_omniglot()
+    # run_mini_imagenet()

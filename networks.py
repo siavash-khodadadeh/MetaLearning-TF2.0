@@ -55,9 +55,12 @@ class MiniImagenetModel(tf.keras.Model):
         self.flatten = Flatten(name='flatten')
         self.dense = Dense(num_classes, activation=None, name='dense')
 
+        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
+
     def conv_block(self, features, conv, bn=None, training=False):
         conv_out = conv(features)
         batch_normalized_out = bn(conv_out, training=training)
+        batch_normalized_out = self.max_pool(batch_normalized_out)
         return tf.keras.activations.relu(batch_normalized_out)
 
     def call(self, inputs, training=False):

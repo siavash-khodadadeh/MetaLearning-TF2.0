@@ -23,6 +23,8 @@ class UMTRA(ModelAgnosticMetaLearningModel):
             meta_learning_rate,
             report_validation_frequency,
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
+            least_number_of_tasks_val_test=-1,  # Make sure the val and test dataset pick at least this many tasks.
+            clip_gradients=False,
             augmentation_function=None
     ):
         self.augmentation_function = augmentation_function
@@ -38,7 +40,9 @@ class UMTRA(ModelAgnosticMetaLearningModel):
             save_after_epochs=save_after_epochs,
             meta_learning_rate=meta_learning_rate,
             report_validation_frequency=report_validation_frequency,
-            log_train_images_after_iteration=log_train_images_after_iteration
+            log_train_images_after_iteration=log_train_images_after_iteration,
+            least_number_of_tasks_val_test=least_number_of_tasks_val_test,
+            clip_gradients=clip_gradients
         )
 
     def get_root(self):
@@ -103,8 +107,8 @@ def run_omniglot():
         augmentation_function=augment
     )
 
-    # umtra.train(epochs=10)
-    umtra.evaluate(iterations=50)
+    umtra.train(epochs=10)
+    # umtra.evaluate(iterations=50)
 
 
 def run_mini_imagenet():
@@ -123,16 +127,23 @@ def run_mini_imagenet():
         database=mini_imagenet_database,
         network_cls=MiniImagenetModel,
         n=5,
-        meta_batch_size=8,
+        meta_batch_size=4,
         num_steps_ml=5,
-        lr_inner_ml=0.01,
+        lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_epochs=20,
+        save_after_epochs=500,
+        meta_learning_rate=0.001,
+        report_validation_frequency=50,
+        log_train_images_after_iteration=1000,
+        least_number_of_tasks_val_test=50,
+        clip_gradients=True,
         augmentation_function=augment
     )
 
     umtra.train(epochs=100)
+    # umtra.evaluate(iterations=50)
 
 
 if __name__ == '__main__':
     run_omniglot()
+    # run_mini_imagenet()
