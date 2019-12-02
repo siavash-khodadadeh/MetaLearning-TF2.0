@@ -8,9 +8,6 @@ import tensorflow as tf
 import settings
 
 
-# TODO
-# Make the mini imagenet database such that it will use the files in mini-imagenet raw dataset.
-
 class Database(ABC):
     def __init__(self, raw_database_address, database_address, random_seed=-1):
         if random_seed != -1:
@@ -44,7 +41,7 @@ class Database(ABC):
 
     def _get_instances(self, k):
         def get_instances(class_dir_address):
-            return tf.data.Dataset.list_files(class_dir_address, shuffle=False).take(2 * k)
+            return tf.data.Dataset.list_files(class_dir_address, shuffle=True).take(2 * k)
         return get_instances
 
     def _get_parse_function(self):

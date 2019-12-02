@@ -159,6 +159,18 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     k += 1
                     variables.append(updated_model.layers[i].beta)
 
+            elif isinstance(model.layers[i], tf.keras.layers.LayerNormalization):
+                if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
+                    updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                    k += 1
+                    variables.append(updated_model.layers[i].gamma)
+                if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
+                    updated_model.layers[i].beta = \
+                        model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                    k += 1
+                    variables.append(updated_model.layers[i].beta)
+
+
         setattr(updated_model, 'meta_trainable_variables', variables)
 
     def get_train_loss_and_gradients(self, train_ds, train_labels):
@@ -272,6 +284,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
             print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
             print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
+
+        return test_accuracy_metric.result().numpy()
 
     def log_images(self, summary_writer, train_ds, val_ds, step):
         with tf.device('cpu:0'):
@@ -459,7 +473,7 @@ def run_mini_imagenet():
         k=1,
         meta_batch_size=4,
         num_steps_ml=5,
-        lr_inner_ml=0.001,
+        lr_inner_ml=0.01,
         num_steps_validation=5,
         save_after_epochs=500,
         meta_learning_rate=0.001,
@@ -474,5 +488,5 @@ def run_mini_imagenet():
 
 
 if __name__ == '__main__':
-    run_omniglot()
-    # run_mini_imagenet()
+    # run_omniglot()
+    run_mini_imagenet()

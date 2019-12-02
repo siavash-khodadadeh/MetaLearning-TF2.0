@@ -67,6 +67,11 @@ Go to the bottom of the readme file and choose Download tar files.
 That is the same link as [this](https://meta-transfer-learning.yaoyao-liu.com/download/).
 After downloading train, val and test tar files. Extract them into a directory and set the variable
 MINI_IMAGENET_RAW_DATA_ADDRESS to the address of that directory.
+* Since we use [auto augment](https://tfhub.dev/google/image_augmentation/nas_cifar/1) for image augmentation on
+Mini-Imagenet and the version of auto augment available on tensorflow-hub works with Tensorflow-1, we have added a 
+repository for mini-imagenet which uses tensorflow1.14 and is built on top of 
+[MAML code](https://github.com/cbfinn/maml). You can go to 
+[this link](https://github.com/siavash-khodadadeh/maml) to use that code. 
 
 ## Citation
 

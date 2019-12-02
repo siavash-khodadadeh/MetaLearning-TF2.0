@@ -66,6 +66,7 @@ class UMTRA(ModelAgnosticMetaLearningModel):
                f'k-{self.k}_' \
                f'stp-{self.num_steps_ml}'
 
+
 def run_omniglot():
     @tf.function
     def augment(images):
@@ -108,7 +109,7 @@ def run_omniglot():
     )
 
     umtra.train(epochs=10)
-    # umtra.evaluate(iterations=50)
+    umtra.evaluate(iterations=50)
 
 
 def run_mini_imagenet():
@@ -116,34 +117,81 @@ def run_mini_imagenet():
 
     @tf.function
     def augment(images):
-        result = list()
-        for i in range(images.shape[0]):
-            image = tf.image.flip_left_right(images[i, ...])
-            result.append(image)
+        images = tf.squeeze(images, axis=1)
 
-        return tf.stack(result)
+        if tf.random.uniform(shape=(), minval=0, maxval=1) > 0.5:
+            images = tf.image.rgb_to_grayscale(images)
+            images = tf.squeeze(images, axis=-1)
+            images = tf.stack((images, images, images), axis=-1)
+        else:
+            images = tf.image.random_brightness(images, max_delta=0.4)
+            images = tf.image.random_hue(images, max_delta=0.4)
+
+        if tf.random.uniform(shape=(), minval=0, maxval=1) > 0.7:
+            random_map = tf.random.uniform(shape=tf.shape(images)[:-1], minval=0, maxval=2, dtype=tf.int32)
+            random_map = tf.stack((random_map, random_map, random_map), axis=-1)
+            random_map = tf.cast(random_map, tf.float32)
+            images = tf.minimum(images, random_map)
+
+        if tf.random.uniform(shape=(), minval=0, maxval=1) > 0.5:
+            transforms = [
+                1,
+                0,
+                -tf.random.uniform(shape=(), minval=-40, maxval=40, dtype=tf.int32),
+                0,
+                1,
+                -tf.random.uniform(shape=(), minval=-40, maxval=40, dtype=tf.int32),
+                0,
+                0
+            ]
+            images = tfa.image.transform(images, transforms)
+
+        if tf.random.uniform(shape=(), minval=0, maxval=1) > 0.7:
+            images = tfa.image.rotate(images, tf.random.uniform(shape=(5, ), minval=-30, maxval=30))
+
+        if tf.random.uniform(shape=(), minval=0, maxval=1) > 0.7:
+            images = tf.image.random_crop(images, size=(5, 42, 42, 3))
+            images = tf.image.resize(images, size=(84, 84))
+
+        return tf.reshape(images, (5, 1, 84, 84, 3))
 
     umtra = UMTRA(
         database=mini_imagenet_database,
         network_cls=MiniImagenetModel,
         n=5,
-        meta_batch_size=4,
-        num_steps_ml=5,
+        meta_batch_size=16,
+        num_steps_ml=1,
         lr_inner_ml=0.05,
-        num_steps_validation=5,
-        save_after_epochs=500,
-        meta_learning_rate=0.001,
-        report_validation_frequency=50,
-        log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=50,
+        num_steps_validation=1,
+        save_after_epochs=1,
+        meta_learning_rate=0.01,
+        report_validation_frequency=1,
+        log_train_images_after_iteration=10,
+        least_number_of_tasks_val_test=100,
         clip_gradients=True,
         augmentation_function=augment
     )
 
-    umtra.train(epochs=100)
-    # umtra.evaluate(iterations=50)
+    umtra.train(epochs=40)
+
+    umtra = UMTRA(
+        database=mini_imagenet_database,
+        network_cls=MiniImagenetModel,
+        n=5,
+        meta_batch_size=16,
+        num_steps_ml=1,
+        lr_inner_ml=0.05,
+        num_steps_validation=1,
+        save_after_epochs=1,
+        meta_learning_rate=0.001,
+        report_validation_frequency=1,
+        log_train_images_after_iteration=10,
+        least_number_of_tasks_val_test=100,
+        clip_gradients=True,
+        augmentation_function=augment
+    )
+    return umtra.evaluate(iterations=50, epochs_to_load_from=3000)
 
 
 if __name__ == '__main__':
     run_omniglot()
-    # run_mini_imagenet()
