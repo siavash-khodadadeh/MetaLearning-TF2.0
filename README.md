@@ -73,6 +73,20 @@ repository for mini-imagenet which uses tensorflow1.14 and is built on top of
 [MAML code](https://github.com/cbfinn/maml). You can go to 
 [this link](https://github.com/siavash-khodadadeh/maml) to use that code. 
 
+### CelebA
+Go to [this website](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) in order to download CelebA dataset.
+Download identity_CelebA.txt and list_attr_celeba.txt and list_eval_partitions.txt files. 
+Download aligned and cropped images. The filename is Img_align_celeba.zip. 
+Notes:
+1. Images are first roughly aligned using similarity transformation according to the two eye locations;
+2. Images are then resized to 218*178;
+3. In evaluation status, "0" represents training image, "1" represents validation image, "2" represents testing image;
+
+Put these files in a directory and extract the zip file. There should be 202,599 images in the folder.
+Then set the value of CELEBA_RAW_DATA_ADDRESS variable in settings.py to the address of that folder. 
+#### CelebA Task 1 - Identity recognition
+
+#### CelebA Task 2- Attribute Assignment
 ## Citation
 
 Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to publish your research.

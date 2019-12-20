@@ -4,9 +4,9 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase
+from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
 from networks import SimpleModel, MiniImagenetModel
-from models.base_model import  BaseModel
+from models.base_model import BaseModel
 from utils import combine_first_two_axes, average_gradients
 import settings
 
@@ -41,8 +41,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         report_validation_frequency,
         log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
         least_number_of_tasks_val_test=-1,  # Make sure the validaiton and test dataset pick at least this many tasks.
-        clip_gradients=False
+        clip_gradients=False,
+        experiment_name=None
     ):
+        self.experiment_name = experiment_name if experiment_name is not None else ''
         self.n = n
         self.k = k
         self.meta_batch_size = meta_batch_size
@@ -56,8 +58,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.clip_gradients = clip_gradients
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
-        self.model = self.network_cls(num_classes=self.n)
-        self.model(tf.zeros(shape=(n * k, *self.database.input_shape)))
+        self.model = self.initialize_network()
 
         self.updated_models = list()
         for _ in range(self.num_steps_ml + 1):
@@ -79,6 +80,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         self.train_accuracy_metric = tf.metrics.Accuracy()
         self.train_loss_metric = tf.metrics.Mean()
+
+    def initialize_network(self):
+        model = self.network_cls(num_classes=self.n)
+        model(tf.zeros(shape=(self.n * self.k, * self.database.input_shape)))
+
+        return model
 
     def get_root(self):
         return os.path.dirname(__file__)
@@ -123,11 +130,15 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return test_dataset
 
     def get_config_info(self):
-        return f'model-{self.network_cls.name}_' \
+        config_str = f'model-{self.network_cls.name}_' \
                f'mbs-{self.meta_batch_size}_' \
                f'n-{self.n}_' \
                f'k-{self.k}_' \
                f'stp-{self.num_steps_ml}'
+        if self.experiment_name != '':
+            config_str += '_' + self.experiment_name
+
+        return config_str
 
     def create_meta_model(self, updated_model, model, gradients):
         k = 0
@@ -193,6 +204,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return train_ds, val_ds, train_labels, val_labels
 
+    def inner_loss(self, train_labels, logits):
+        loss = tf.reduce_sum(
+            tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
+        )
+        return loss
+
     def inner_train_loop(self, train_ds, train_labels, num_iterations=-1):
         if num_iterations == -1:
             num_iterations = self.num_steps_ml
@@ -207,9 +224,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 with tf.GradientTape(persistent=True) as train_tape:
                     train_tape.watch(self.updated_models[k - 1].meta_trainable_variables)
                     logits = self.updated_models[k - 1](train_ds, training=True)
-                    loss = tf.reduce_sum(
-                        tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
-                    )
+                    loss = self.inner_loss(train_labels, logits)
                 gradients = train_tape.gradient(loss, self.updated_models[k - 1].meta_trainable_variables)
                 self.create_meta_model(self.updated_models[k], self.updated_models[k - 1], gradients)
 
@@ -227,9 +242,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 with tf.GradientTape(persistent=True) as train_tape:
                     train_tape.watch(copy_model.meta_trainable_variables)
                     logits = copy_model(train_ds, training=True)
-                    loss = tf.reduce_sum(
-                        tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
-                    )
+                    loss = self.inner_loss(train_labels, logits)
                 gradients = train_tape.gradient(loss, copy_model.meta_trainable_variables)
                 self.create_meta_model(copy_model, copy_model, gradients)
 
@@ -304,13 +317,17 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 )
 
     def update_loss_and_accuracy(self, logits, labels, loss_metric, accuracy_metric):
-        print(tf.argmax(logits, axis=-1))
-        val_loss = tf.reduce_sum(
-            tf.losses.categorical_crossentropy(labels, logits, from_logits=True))
+        val_loss = self.outer_loss(labels, logits)
         loss_metric.update_state(val_loss)
+
+        predicted_class_labels = self.predict_class_labels_from_logits(logits)
+        real_labels = self.convert_labels_to_real_labels(labels)
+
+        print(predicted_class_labels)
+
         accuracy_metric.update_state(
-            tf.argmax(labels, axis=-1),
-            tf.argmax(logits, axis=-1)
+            real_labels,
+            predicted_class_labels
         )
 
     def log_metric(self, summary_writer, name, metric, step):
@@ -346,6 +363,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
 
+
+    def outer_loss(self, labels, logits):
+        loss = tf.reduce_sum(
+            tf.losses.categorical_crossentropy(labels, logits, from_logits=True)
+        )
+        return loss
+
     @tf.function
     def get_losses_of_tasks_batch(self, inputs):
         task, labels, iteration_count = inputs
@@ -371,15 +395,23 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         updated_model = self.inner_train_loop(train_ds, train_labels, -1)
         updated_model_logits = updated_model(val_ds, training=True)
-        val_loss = tf.reduce_sum(
-            tf.losses.categorical_crossentropy(val_labels, updated_model_logits, from_logits=True)
-        )
+        val_loss = self.outer_loss(val_labels, updated_model_logits)
         self.train_loss_metric.update_state(val_loss)
+
+        predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
+        real_labels = self.convert_labels_to_real_labels(val_labels)
+
         self.train_accuracy_metric.update_state(
-            tf.argmax(val_labels, axis=-1),
-            tf.argmax(updated_model_logits, axis=-1)
+            real_labels,
+            predicted_class_labels
         )
         return val_loss
+
+    def convert_labels_to_real_labels(self, labels):
+        return tf.argmax(labels, axis=-1)
+
+    def predict_class_labels_from_logits(self, logits):
+        return tf.argmax(logits, axis=-1)
 
     def meta_train_loop(self, tasks_meta_batch, labels_meta_batch, iteration_count):
         with tf.GradientTape(persistent=True) as outer_tape:
@@ -483,10 +515,34 @@ def run_mini_imagenet():
         clip_gradients=True
     )
 
-    # maml.train(epochs=4000)
+    maml.train(epochs=48000)
     maml.evaluate(50)
 
 
+def run_celeba():
+    celeba_database = CelebADatabase(random_seed=-1)
+    maml = ModelAgnosticMetaLearningModel(
+        database=celeba_database,
+        network_cls=MiniImagenetModel,
+        n=5,
+        k=1,
+        meta_batch_size=4,
+        num_steps_ml=5,
+        lr_inner_ml=0.01,
+        num_steps_validation=5,
+        save_after_epochs=20,
+        meta_learning_rate=0.001,
+        report_validation_frequency=1,
+        log_train_images_after_iteration=1000,
+        least_number_of_tasks_val_test=50,
+        clip_gradients=True,
+        experiment_name='celeba'
+    )
+
+    # maml.train(epochs=100)
+    maml.evaluate(5)
+
 if __name__ == '__main__':
     # run_omniglot()
-    run_mini_imagenet()
+    # run_mini_imagenet()
+    run_celeba()

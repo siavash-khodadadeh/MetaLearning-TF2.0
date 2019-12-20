@@ -63,6 +63,17 @@ class Database(ABC):
         labels_dataset = labels_dataset.repeat(steps_per_epoch)
         return labels_dataset
 
+    def get_folders_with_greater_than_equal_k_files(self, folders, k):
+        to_be_removed = list()
+        for folder in folders:
+            if len(os.listdir(folder)) < k:
+                to_be_removed.append(folder)
+
+        for folder in to_be_removed:
+            folders.remove(folder)
+
+        return folders
+
     def get_supervised_meta_learning_dataset(
             self,
             folders,
@@ -72,10 +83,7 @@ class Database(ABC):
             one_hot_labels=True,
             reshuffle_each_iteration=True,
     ):
-        for class_name in folders:
-            assert(len(os.listdir(class_name)) > 2 * k), f'The number of instances in each class should be larger ' \
-                                                         f'than {2 * k}, however, the number of instances in' \
-                                                         f' {class_name} are: {len(os.listdir(class_name))}'
+        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
 
         classes = [class_name + '/*' for class_name in folders]
         steps_per_epoch = len(classes) // n // meta_batch_size
@@ -95,6 +103,68 @@ class Database(ABC):
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
         
         dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.batch(n, drop_remainder=True)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+        return dataset
+
+    def get_abstract_learning_dataset(
+            self,
+            folders,
+            n,
+            k,
+            meta_batch_size,
+            reshuffle_each_iteration=True
+    ):
+        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
+        classes = [class_name + '/*' for class_name in folders]
+        steps_per_epoch = len(classes) // n // meta_batch_size
+
+        labels_dataset = tf.data.Dataset.from_tensor_slices(tf.concat(([1.], tf.zeros((n - 1), dtype=tf.float32)), axis=0))
+
+        labels_dataset = labels_dataset.interleave(
+            lambda x: tf.data.Dataset.from_tensors(x).repeat(2 * k),
+            cycle_length=n,
+            block_length=k
+        )
+        labels_dataset = labels_dataset.repeat(meta_batch_size)
+        labels_dataset = labels_dataset.repeat(steps_per_epoch)
+
+        dataset = tf.data.Dataset.from_tensor_slices(classes)
+        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.interleave(
+            self._get_instances(k),
+            cycle_length=n,
+            block_length=k,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+
+        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.batch(n, drop_remainder=True)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+        return dataset
+
+    def get_random_dataset(self, folders, n, meta_batch_size, one_hot_labels=True, reshuffle_each_iteration=True):
+        instances = list()
+        for class_name in folders:
+            instances.extend(os.path.join(class_name, file_name) for file_name in os.listdir(class_name))
+        instances.sort()
+        steps_per_epoch = len(instances) // n // meta_batch_size
+        labels_dataset = self.make_labels_dataset(n, 1, meta_batch_size, steps_per_epoch, one_hot_labels)
+
+        dataset = tf.data.Dataset.from_tensor_slices(instances)
+        dataset = dataset.shuffle(buffer_size=len(instances), reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.map(self._get_parse_function())
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+        dataset = dataset.batch(1, drop_remainder=False)
         dataset = dataset.batch(n, drop_remainder=True)
         dataset = dataset.batch(2, drop_remainder=True)
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
@@ -228,3 +298,72 @@ class MiniImagenetDatabase(Database):
     def prepare_database(self):
         if not os.path.exists(self.database_address):
             shutil.copytree(self.raw_database_address, self.database_address)
+
+
+class CelebADatabase(Database):
+    def get_input_shape(self):
+        return 84, 84, 3
+
+    def __init__(self, random_seed=-1, config=None):
+        super(CelebADatabase, self).__init__(
+            settings.CELEBA_RAW_DATA_ADDRESS,
+            os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task'),
+            random_seed=random_seed,
+        )
+
+    def get_train_val_test_folders(self):
+        dataset_folders = list()
+        for dataset_type in ('train', 'val', 'test'):
+            dataset_base_address = os.path.join(self.database_address, dataset_type)
+            folders = [
+                os.path.join(dataset_base_address, class_name) for class_name in os.listdir(dataset_base_address)
+            ]
+            dataset_folders.append(folders)
+        return dataset_folders[0], dataset_folders[1], dataset_folders[2]
+
+    def _get_parse_function(self):
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, (84, 84))
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+        return parse_function
+
+    def put_images_in_train_val_and_test_folders(self):
+        os.mkdir(os.path.join(self.database_address, 'train'))
+        os.mkdir(os.path.join(self.database_address, 'val'))
+        os.mkdir(os.path.join(self.database_address, 'test'))
+        identity_map = dict()
+
+        with open(os.path.join(self.raw_database_address, 'identity_CelebA.txt')) as f:
+            for line in f:
+                line_data = line.split()
+                identity_map[line_data[0]] = line_data[1]
+
+        with open(os.path.join(self.raw_database_address, 'list_eval_partition.txt')) as f:
+            for line in f:
+                line_data = line.split()
+
+                if line_data[1] == '0':
+                    target_address = os.path.join(self.database_address, 'train')
+                elif line_data[1] == '1':
+                    target_address = os.path.join(self.database_address, 'val')
+                else:
+                    target_address = os.path.join(self.database_address, 'test')
+
+                target_dir = os.path.join(target_address, identity_map[line_data[0]])
+                if not os.path.exists(target_dir):
+                    os.mkdir(target_dir)
+
+                target_address = os.path.join(target_dir, line_data[0])
+
+                source_address = os.path.join(self.raw_database_address, 'img_align_celeba', line_data[0])
+                shutil.copyfile(source_address, target_address)
+
+    def prepare_database(self):
+        if not os.path.exists(self.database_address):
+            os.makedirs(self.database_address)
+            self.put_images_in_train_val_and_test_folders()
+
+
