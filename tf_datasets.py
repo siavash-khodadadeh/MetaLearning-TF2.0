@@ -1,9 +1,11 @@
 import os
 import shutil
+import itertools
 from abc import ABC, abstractmethod
 import random
 
 import tensorflow as tf
+import tqdm
 
 import settings
 
@@ -73,6 +75,29 @@ class Database(ABC):
             folders.remove(folder)
 
         return folders
+
+    def get_dataset_from_tasks_directly(self, tasks, n, k, meta_batch_size, one_hot_labels=True):
+        dataset = tf.data.Dataset.from_tensor_slices(tasks)
+        dataset = dataset.unbatch()
+        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+        steps_per_epoch = len(tasks)
+        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+
+        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.batch(n, drop_remainder=True)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        # for item in dataset:
+        #     print('dataset item')
+        #     print(item)
+        #     exit()
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+        return dataset
+
 
     def get_supervised_meta_learning_dataset(
             self,
@@ -303,6 +328,175 @@ class MiniImagenetDatabase(Database):
 class CelebADatabase(Database):
     def get_input_shape(self):
         return 84, 84, 3
+
+    def get_train_val_test_partition(self):
+        train_val_test_partition = dict()
+        with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'list_eval_partition.txt')) as list_eval_partition:
+            for line in list_eval_partition:
+                line_data = line.split()
+                if line_data[1] == '0':
+                    train_val_test_partition[line_data[0]] = 'train'
+                elif line_data[1] == '1':
+                    train_val_test_partition[line_data[0]] = 'val'
+                else:
+                    train_val_test_partition[line_data[0]] = 'test'
+        return train_val_test_partition
+
+    def get_attributes_task_dataset(self, partition, k, meta_batch_size):
+        self.make_attributes_task_dataset()
+        tasks_base_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/attributes_task', partition)
+
+        def get_images_from_task_file(file_address):
+            negative_task_address = tf.strings.regex_replace(file_address, 'F', '@')
+            negative_task_address = tf.strings.regex_replace(negative_task_address, 'T', 'F')
+            negative_task_address = tf.strings.regex_replace(negative_task_address, '@', 'T')
+            file_address = tf.strings.join((tasks_base_address, '/', file_address))
+            negative_task_address = tf.strings.join((tasks_base_address, '/', negative_task_address))
+
+            positive_lines = tf.strings.split(tf.io.read_file(file_address), '\n')[:-1]
+            negative_lines = tf.strings.split(tf.io.read_file(negative_task_address), '\n')[:-1]
+
+            positive_lines = tf.random.shuffle(positive_lines)
+            negative_lines = tf.random.shuffle(negative_lines)
+            positive_lines = positive_lines[:2 * k]
+            negative_lines = negative_lines[:2 * k]
+
+            return positive_lines, negative_lines
+
+
+        all_tasks = os.listdir(tasks_base_address)
+        dataset = tf.data.Dataset.from_tensor_slices(all_tasks)
+        dataset = dataset.map(get_images_from_task_file)
+
+        for item in dataset:
+            print(item)
+            break
+
+    def make_attributes_task_dataset(self):
+        num_train_attributes = 20
+        num_val_attributes = 10
+        num_test_attributes = 10
+        min_samples_for_each_class = 10  # For making exactly the same tasks as in CACTUs set this number to 9.
+
+        attributes_task_base_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/attributes_task')
+        if not os.path.exists(attributes_task_base_address):
+            os.makedirs(attributes_task_base_address)
+        else:
+            return
+
+        train_folder = os.path.join(attributes_task_base_address, 'train')
+        val_folder = os.path.join(attributes_task_base_address, 'val')
+        test_folder = os.path.join(attributes_task_base_address, 'test')
+
+        for folder_name in (train_folder, val_folder, test_folder):
+            if not os.path.exists(folder_name):
+                os.makedirs(folder_name)
+
+        self.generate_task_data(
+            start_attribute=0,
+            end_attribute=num_train_attributes,
+            min_samples=min_samples_for_each_class,
+            partition='train'
+        )
+        self.generate_task_data(
+            start_attribute=num_train_attributes,
+            end_attribute=num_train_attributes + num_val_attributes,
+            min_samples=min_samples_for_each_class,
+            partition='val'
+        )
+        self.generate_task_data(
+            start_attribute=num_train_attributes + num_val_attributes,
+            end_attribute=num_train_attributes + num_val_attributes + num_test_attributes,
+            min_samples=min_samples_for_each_class,
+            partition='test'
+        )
+
+    def generate_task_data(self, start_attribute, end_attribute, min_samples, partition):
+        train_val_test_partition = self.get_train_val_test_partition()
+        identities = self.get_identities()
+        with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'list_attr_celeba.txt')) as attributes_file:
+            num_lines = int(attributes_file.readline())
+            attributes = attributes_file.readline().split()
+            attributes.sort()
+
+            attributes_positive_sets = list()
+            attributes_negative_sets = list()
+
+            for i in range(40):
+                attributes_positive_sets.append(set())
+                attributes_negative_sets.append(set())
+
+            for _ in range(num_lines):
+                line_data = attributes_file.readline().split()
+                example_name = line_data[0]
+
+                if train_val_test_partition[example_name] != partition:
+                    continue
+
+                for i in range(40):
+                    if line_data[i + 1] == '1':
+                        attributes_positive_sets[i].add(example_name)
+                    else:
+                        attributes_negative_sets[i].add(example_name)
+
+        all_combinations = list(itertools.combinations(range(start_attribute, end_attribute), 3))
+        boolean_combinations = list(itertools.product((True, False), repeat=3))[4:]
+
+        counter = 0
+        for combination in tqdm.tqdm(all_combinations):
+            for bool_combination in boolean_combinations:
+                positive_sets = list()
+                negative_sets = list()
+                for i in range(3):
+                    if bool_combination[i]:
+                        positive_sets.append(attributes_positive_sets[combination[i]])
+                        negative_sets.append(attributes_negative_sets[combination[i]])
+                    else:
+                        positive_sets.append(attributes_negative_sets[combination[i]])
+                        negative_sets.append(attributes_positive_sets[combination[i]])
+
+                positive_samples = [
+                    item for item in positive_sets[0] if item in positive_sets[1] and item in positive_sets[2]
+                ]
+                negative_samples = [
+                    item for item in negative_sets[0] if item in negative_sets[1] and item in negative_sets[2]
+                ]
+
+                if len(positive_samples) > min_samples and len(negative_samples) > min_samples:
+                    counter += 1
+                    self.make_task_file(combination, bool_combination, positive_samples, partition, identities)
+                    bool_combination = [not item for item in bool_combination]
+                    self.make_task_file(combination, bool_combination, negative_samples, partition, identities)
+        print(f'Number of {partition} tasks : {counter}')
+
+    def make_task_file(self, combination, bool_combinations, samples, partition, identities):
+        task_name = f'{str(bool_combinations[0])[:1]}{combination[0]}_' \
+                    f'{str(bool_combinations[1])[:1]}{combination[1]}_' \
+                    f'{str(bool_combinations[2])[:1]}{combination[2]}.txt'
+
+        task_file_name = os.path.join(
+            settings.PROJECT_ROOT_ADDRESS,
+            'data/celeba/attributes_task',
+            partition,
+            task_name
+        )
+        with open(task_file_name, 'w') as task_file:
+            for sample in samples:
+                sample_full_address = os.path.join(self.database_address, partition, identities[sample], sample)
+                assert(os.path.exists(sample_full_address))
+                task_file.write(
+                    sample_full_address
+                )
+                task_file.write('\n')
+
+    def get_identities(self):
+        identities = dict()
+        with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'identity_CelebA.txt')) as identity_file:
+            for line in identity_file:
+                line_data = line.split()
+                identities[line_data[0]] = line_data[1]
+
+        return identities
 
     def __init__(self, random_seed=-1, config=None):
         super(CelebADatabase, self).__init__(

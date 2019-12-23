@@ -37,7 +37,7 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
             database=database,
             network_cls=network_cls,
             n=n,
-            k=1,
+            k=5,
             meta_batch_size=meta_batch_size,
             num_steps_ml=num_steps_ml,
             lr_inner_ml=lr_inner_ml,
@@ -120,7 +120,7 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
             np.save(features_address, features)
 
         print('features loaded')
-        return np.transpose(features), sampled_files
+        return np.transpose(features), sampled_files, dir_path
 
     def get_pca_features_from_files(self, sampled_files):
         all_files = list()
@@ -234,8 +234,8 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
             ind_j = np.argmax(np.abs(dot_product_values))
             data_points.append(inds[i])
             data_points.append(ind_j)
-            print(inds[i])
-            print(ind_j)
+            # print(inds[i])
+            # print(ind_j)
 
         # the list of all elements: 1, 1, 2, 2, 3, 3, 4, 4, 5, 5
         return data_points
@@ -318,91 +318,64 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
         # the list of all elements: 1, 1, 2, 2, 3, 3, 4, 4, 5, 5
         return data_points
 
+    def get_test_dataset(self):
+        self.database.get_attributes_task_dataset(partition='test', k=self.k, meta_batch_size=1)
+
+    def get_val_dataset(self):
+        val_dataset = self.database.get_supervised_meta_learning_dataset(
+            self.database.val_folders,
+            n=self.n,
+            k=self.k,
+            meta_batch_size=1,
+            reshuffle_each_iteration=True
+        )
+        steps_per_epoch = max(val_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
+        val_dataset = val_dataset.repeat(-1)
+        val_dataset = val_dataset.take(steps_per_epoch)
+        setattr(val_dataset, 'steps_per_epoch', steps_per_epoch)
+        return val_dataset
+
+
     def get_train_dataset(self):
         k = 5
-        data, sampled_files = self.prepare_data()
+        num_tasks = 20000
 
-        data = data[:, :2000]
-        sampled_files = sampled_files[:2000]
+        data, sampled_files, dir_path = self.prepare_data()
+        tasks_address = os.path.join(dir_path, f'tasks_{num_tasks}.npy')
 
-        begin_time = datetime.now()
-        print('running SP')
+        if os.path.exists(tasks_address):
+            tasks = np.load(tasks_address)
+        else:
+            tasks = list()
+            begin_time = datetime.now()
+            print(begin_time)
+            for i in range(num_tasks):
+                if i % 100 == 0:
+                    print(f'{i} tasks are generated out of {num_tasks}')
 
-        inds = self.SP(data, k)
-        # inds = np.random.randint(0, 2000, size=k)
+                cols = np.random.choice(data.shape[1], 2000, replace=False)
+                task_data_points = data[:, cols]
+                task_sampled_files = sampled_files[cols]
 
+                inds = self.SP(task_data_points, k)
+                # inds = np.random.randint(0, 2000, size=k)
 
-        print('inds')
-        print(inds)
-        print('SP done')
+                selected_data_points = self.idea_3(task_data_points, inds, k)
 
-        data_points = self.idea_3(data, inds, k)
+                tasks.append(task_sampled_files[selected_data_points])
 
-        end_time = datetime.now()
-        print(end_time - begin_time)
+            np.save(tasks_address, tasks)
 
-        # clustering
-        # from sklearn.cluster import KMeans
-        # k_means = KMeans(n_clusters=k)
-        # data = np.transpose(data)
-        # k_means.cluster_centers_ = data[inds, :]
-        # result = k_means.predict(data)
-        # print(result)
+            end_time = datetime.now()
+            print(end_time)
+            print(f'time to generate tasks: {end_time - begin_time}')
 
-        # clusters = dict()
-
-        # for index, cluster_label in enumerate(result):
-        #     if cluster_label not in clusters.keys():
-        #         clusters[cluster_label] = list()
-        #     clusters[cluster_label].append(index)
-        #
-        # for cluster_id in range(k):
-        #     for item in clusters[cluster_id]:
-        #         file_address = sampled_files[item]
-        #         name = file_address
-        #         name = name[name.rfind('/') + 1:]
-        #
-        #         dir_address = os.path.join(
-        #             settings.PROJECT_ROOT_ADDRESS,
-        #             'data/mini-imagenet-clusters',
-        #             str(cluster_id)
-        #         )
-        #         if not os.path.exists(dir_address):
-        #             os.mkdir(dir_address)
-        #
-        #         new_address = os.path.join(dir_address, name)
-        #         copyfile(file_address, new_address)
-
-            # first = clusters[cluster_id][0]
-            # name = sampled_files[first]
-            # name = name[:name.rfind('/')]
-            # name = name[name.rfind('/'):]
-            # print(name)
-            # img = Image.open(sampled_files[first])
-            # plt.imshow(img)
-            # plt.show()
-            #
-            # second = clusters[cluster_id][1]
-            # name = sampled_files[second]
-            # name = name[:name.rfind('/')]
-            # name = name[name.rfind('/'):]
-            # print(name)
-            # img = Image.open(sampled_files[second])
-            # plt.imshow(img)
-            # plt.show()
-
-        # visualize data points
-        # data_points = inds
-        #
-        for data_point in data_points:
-            img = Image.open(sampled_files[data_point])
-            plt.imshow(img)
-            name = sampled_files[data_point]
-            name = name[:name.rfind('/')]
-            name = name[name.rfind('/'):]
-            print(name)
-            plt.title(name)
-            plt.show()
+        dataset = self.database.get_dataset_from_tasks_directly(
+            tasks,
+            self.n,
+            self.k,
+            self.meta_batch_size
+        )
 
         # dataset = self.database.get_umtra_dataset(
         #     self.database.train_folders,
@@ -411,8 +384,7 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
         #     augmentation_function=self.augmentation_function
         # )
 
-        # return dataset
-        return None
+        return dataset
 
     def get_config_info(self):
         return f'umtra_' \
@@ -453,9 +425,9 @@ def run_mini_imagenet():
 
     umtra = UMTRAIterativeProjection(
         database=mini_imagenet_database,
-        network_cls=SimpleModel,
+        network_cls=MiniImagenetModel,
         n=5,
-        meta_batch_size=32,
+        meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.01,
         num_steps_validation=5,
@@ -473,9 +445,9 @@ def run_celeba():
     celeba_dataset = CelebADatabase(random_seed=-1)
     umtra = UMTRAIterativeProjection(
         database=celeba_dataset,
-        network_cls=SimpleModel,
+        network_cls=MiniImagenetModel,
         n=5,
-        meta_batch_size=32,
+        meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.01,
         num_steps_validation=5,
@@ -485,7 +457,7 @@ def run_celeba():
         report_validation_frequency=1,
     )
 
-    umtra.train(epochs=10)
+    # umtra.train(epochs=100)
     umtra.evaluate(iterations=50)
 
 
