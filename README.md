@@ -14,8 +14,8 @@ We support a few datasets for now. We will add more datasets eventually. Please 
 datasets.
 
 ### Omniglot
-Download [this](https://www.kaggle.com/watesoyan/omniglot/downloads/Omniglot.zip/1) file and extract it into some 
-directory on your system.
+Download [this](https://www.kaggle.com/watesoyan/omniglot/download) file and extract it into some 
+directory on your system. If the link is not working (due to changes from kaggle links), try to download it from [here](https://www.kaggle.com/watesoyan/omniglot). 
 
 Make sure to set the address of that directory the same as OMNIGLOT_RAW_DATA_ADDRESS variable in settings.py file.
 
