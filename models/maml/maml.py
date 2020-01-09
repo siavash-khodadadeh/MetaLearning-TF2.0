@@ -307,13 +307,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     'train',
                     train_ds,
                     step=step,
-                    max_outputs=5
+                    max_outputs=10
                 )
                 tf.summary.image(
                     'validation',
                     val_ds,
                     step=step,
-                    max_outputs=5
+                    max_outputs=10
                 )
 
     def update_loss_and_accuracy(self, logits, labels, loss_metric, accuracy_metric):
@@ -323,7 +323,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         predicted_class_labels = self.predict_class_labels_from_logits(logits)
         real_labels = self.convert_labels_to_real_labels(labels)
 
-        print(predicted_class_labels)
+        # print(predicted_class_labels)
 
         accuracy_metric.update_state(
             real_labels,
@@ -362,7 +362,6 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
-
 
     def outer_loss(self, labels, logits):
         loss = tf.reduce_sum(
@@ -439,27 +438,29 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         pbar = tqdm(self.train_dataset)
 
+        self.train_accuracy_metric.reset_states()
+        self.train_loss_metric.reset_states()
+
         for epoch_count in range(start_epoch, epochs):
             if epoch_count != 0:
-                if epoch_count % self.report_validation_frequency == 0:
-                    self.report_validation_loss_and_accuracy(epoch_count)
-                    if epoch_count != 0:
-                        print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
-                        print('Train Accuracy: {}'.format(self.train_accuracy_metric.result().numpy()))
-
-                with self.train_summary_writer.as_default():
-                    tf.summary.scalar('Loss', self.train_loss_metric.result(), step=epoch_count)
-                    tf.summary.scalar('Accuracy', self.train_accuracy_metric.result(), step=epoch_count)
-
                 if epoch_count % self.save_after_epochs == 0:
                     self.save_model(epoch_count)
-
-            self.train_accuracy_metric.reset_states()
-            self.train_loss_metric.reset_states()
 
             for tasks_meta_batch, labels_meta_batch in self.train_dataset:
                 self.meta_train_loop(tasks_meta_batch, labels_meta_batch, iteration_count)
                 iteration_count += 1
+
+                if iteration_count % self.report_validation_frequency == 0:
+                    self.report_validation_loss_and_accuracy(iteration_count)
+                    if epoch_count != 0:
+                        print('Train Loss: {}'.format(self.train_loss_metric.result().numpy()))
+                        print('Train Accuracy: {}'.format(self.train_accuracy_metric.result().numpy()))
+                    with self.train_summary_writer.as_default():
+                        tf.summary.scalar('Loss', self.train_loss_metric.result(), step=iteration_count)
+                        tf.summary.scalar('Accuracy', self.train_accuracy_metric.result(), step=iteration_count)
+                    self.train_accuracy_metric.reset_states()
+                    self.train_loss_metric.reset_states()
+
                 pbar.set_description_str('Epoch{}, Iteration{}: Train Loss: {}, Train Accuracy: {}'.format(
                     epoch_count,
                     iteration_count,

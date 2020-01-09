@@ -1,10 +1,12 @@
 import os
+from datetime import datetime
 import shutil
 import itertools
 from abc import ABC, abstractmethod
 import random
 
 import tensorflow as tf
+import numpy as np
 import tqdm
 
 import settings
@@ -15,6 +17,7 @@ class Database(ABC):
         if random_seed != -1:
             random.seed(random_seed)
             tf.random.set_seed(random_seed)
+            np.random.seed(random_seed)
         
         self.raw_database_address = raw_database_address
         self.database_address = database_address
@@ -51,6 +54,107 @@ class Database(ABC):
             return example_address
         return parse_function
 
+    def load_dumped_features(self, name):
+        """Returns two numpy matrices. First one is the name of all files which are dumped with the shape of (N, )
+        and the second one is the features with the shape of (N, M), where N is the number of files and M is the
+        length of the each feature vector. The i-th row in second matrix is the feature vector of i-th element in the
+        first matrix.
+        """
+        dir_path = os.path.join(self.database_address, name)
+        if not os.path.exists(dir_path):
+            raise Exception('Requested features are not dumped.')
+
+        files_names_address = os.path.join(dir_path, 'files_names.npy')
+        features_address = os.path.join(dir_path, 'features.npy')
+        all_files = np.load(files_names_address)
+        features = np.load(features_address)
+
+        return all_files, features
+
+    def dump_vgg19_last_hidden_layer(self, partition):
+        base_model = tf.keras.applications.VGG19(weights='imagenet')
+        model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
+
+        self.dump_features(
+            partition,
+            'vgg19_last_hidden_layer',
+            model,
+            (224, 224),
+            4096,
+            tf.keras.applications.inception_v3.preprocess_input
+        )
+
+    def dump_features(self, dataset_partition, name, model, input_shape, feature_size, preprocess_fn):
+        """Dumps the features of a partition of database: Train, val or test. The features are extracted
+        by a model and then dumped into a .npy file. Also the filenames for which the features are dumped will be
+        stored in another .npy file. The name of these .npy files are features.npy and files_names.npy and they are
+        stored in a directory under database_address. The name of directory is the join of dataset_partition and
+        name argument.
+
+        Inputs:
+        dataset_partition: Should be train, val or test.
+        name: The name of features to dump. For example VGG19_layer_4
+        model: The network or model which is used to dump features. The output of this model is the feature which
+        will be stored.
+        input_shape: The input shape of each image file.
+        feature_size: The length or depth of features.
+        preprocess_fn: The preprocessing function which is applied to the raw image before passing it through the model.
+        Use None to ignore it.
+
+        Returns: None
+
+        This function does not return anything but stores two numpy files. In order to load them use
+        load_dumped_features function. """
+
+        if dataset_partition == 'train':
+            files_dir = self.train_folders
+        elif dataset_partition == 'val':
+            files_dir = self.val_folders
+        elif dataset_partition == 'test':
+            files_dir = self.test_folders
+        else:
+            raise Exception('Pratition is not train val or test!')
+
+        assert(dataset_partition in ('train', 'val', 'test'))
+
+        dir_path = os.path.join(self.database_address, f'{name}_{dataset_partition}')
+        if not os.path.exists(dir_path):
+            os.mkdir(dir_path)
+
+        all_files = list()
+
+        for class_name in files_dir:
+            all_files.extend([os.path.join(class_name, file_name) for file_name in os.listdir(class_name)])
+
+        files_names_address = os.path.join(dir_path, 'files_names.npy')
+        np.save(files_names_address, all_files)
+
+        features_address = os.path.join(dir_path, 'features.npy')
+
+        n = len(all_files)
+        m = feature_size
+        features = np.zeros(shape=(n, m))
+
+        begin_time = datetime.now()
+
+        for index, sampled_file in enumerate(all_files):
+            if index % 1000 == 0:
+                print(f'{index}/{len(all_files)} images dumped')
+
+            img = tf.keras.preprocessing.image.load_img(sampled_file, target_size=(input_shape[:2]))
+            img = tf.keras.preprocessing.image.img_to_array(img)
+            img = np.expand_dims(img, axis=0)
+            if preprocess_fn is not None:
+                img = preprocess_fn(img)
+
+            features[index, :] = model.predict(img).reshape(-1)
+
+        np.save(features_address, features)
+        end_time = datetime.now()
+        print('Features dumped')
+        print(f'Time to dump features: {str(end_time - begin_time)}')
+
+
     def make_labels_dataset(self, n, k, meta_batch_size, steps_per_epoch, one_hot_labels):
         labels_dataset = tf.data.Dataset.range(n)
         if one_hot_labels:
@@ -81,7 +185,7 @@ class Database(ABC):
         dataset = dataset.unbatch()
         dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-        steps_per_epoch = len(tasks)
+        steps_per_epoch = len(tasks) // meta_batch_size
         labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
 
@@ -98,6 +202,98 @@ class Database(ABC):
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
+    def get_sp_meta_learning_dataset(
+        self,
+        folders,
+        n,
+        k,
+        meta_batch_size,
+        features_name='vgg19_last_hidden_layer_train',
+        one_hot_labels=True,
+        reshuffle_each_iteration=True,
+
+    ):
+        from utils import SP
+        from datetime import datetime
+        # load the feature space and sampled files first.
+        # features = np.load(os.path.join(
+        #     settings.PROJECT_ROOT_ADDRESS,
+        #     'models/umtra-iterative-projection/vgg19_last_hidden_layer_CelebADatabase/features.npy'
+        # ))
+        # sampled_files = np.load(os.path.join(
+        #     settings.PROJECT_ROOT_ADDRESS,
+        #     'models/umtra-iterative-projection/vgg19_last_hidden_layer_CelebADatabase/sampled_files.npy'
+        # ))
+
+        sampled_files, features = self.load_dumped_features(features_name)
+
+        feature_dict = {
+            bytes(file_name, encoding='utf-8'): feature for file_name, feature in zip(sampled_files, features)
+        }
+
+        def get_instances(k):
+            def choose_files_with_sp(files, num):
+                """return a list which is a subset of files and it has to have num elements"""
+                feature_of_files = np.zeros(shape=(4096, len(files)))
+                np.random.shuffle(files)
+
+                for i, file in enumerate(files):
+                    feature_of_files[:, i] = feature_dict[file]
+
+                #  # mean squared error
+                #  data_point = feature_of_files[:, 0]
+                #  others = feature_of_files[:, 1:]
+                #  res = np.sum(np.square(others - data_point.reshape((4096, 1))), axis=0)
+                #  closest = np.argmax(res)
+
+                indices = SP(feature_of_files, num)
+                # indices = np.array([0, 1])
+
+                return files[indices]
+
+            def f(class_dir_address):
+                def get_files(dir_address):
+                    dir_address = dir_address.numpy()[:-1]
+                    files = np.array([os.path.join(dir_address, file_name) for file_name in os.listdir(dir_address)])
+                    # the first k are train and the remaining are validation
+                    # print(files[:2 * k])
+                    chosen_files = choose_files_with_sp(files, 2 * k)
+
+                    return np.array(chosen_files)
+
+                return tf.data.Dataset.from_tensor_slices(tf.py_function(get_files, inp=[class_dir_address], Tout=tf.string))
+            return f
+            # return self._get_instances(k)
+
+        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
+
+        classes = [class_name + '/*' for class_name in folders]
+        steps_per_epoch = len(classes) // n // meta_batch_size
+
+        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
+
+        dataset = tf.data.Dataset.from_tensor_slices(classes)
+        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.interleave(
+            get_instances(k),
+            cycle_length=n,
+            block_length=k,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+
+        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.batch(n, drop_remainder=True)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        # dataset = dataset.prefetch(4)
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+
+        return dataset
 
     def get_supervised_meta_learning_dataset(
             self,
@@ -361,16 +557,26 @@ class CelebADatabase(Database):
             positive_lines = positive_lines[:2 * k]
             negative_lines = negative_lines[:2 * k]
 
-            return positive_lines, negative_lines
-
+            return tf.concat((positive_lines[:k], negative_lines[:k], positive_lines[k:], negative_lines[k:]), axis=0)
 
         all_tasks = os.listdir(tasks_base_address)
         dataset = tf.data.Dataset.from_tensor_slices(all_tasks)
         dataset = dataset.map(get_images_from_task_file)
+        dataset = dataset.unbatch()
 
-        for item in dataset:
-            print(item)
-            break
+        steps_per_epoch = len(all_tasks) // meta_batch_size
+        labels_dataset = self.make_labels_dataset(2, k, meta_batch_size, steps_per_epoch, True)
+
+        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+
+        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+        return dataset
 
     def make_attributes_task_dataset(self):
         num_train_attributes = 20
@@ -561,3 +767,6 @@ class CelebADatabase(Database):
             self.put_images_in_train_val_and_test_folders()
 
 
+if __name__ == '__main__':
+    database = MiniImagenetDatabase()
+    database.dump_vgg19_last_hidden_layer(partition='train')
