@@ -4,3 +4,7 @@ mock
 tqdm
 numpy
 miniimagenettools
+#  Just for plots and graphs
+matplotlib
+seaborn
+pandas
