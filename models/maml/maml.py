@@ -273,6 +273,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return epoch_count
 
     def evaluate(self, iterations, epochs_to_load_from=None):
+        """This function is tested that the accuracy and loss are averaged correctly"""
         self.test_dataset = self.get_test_dataset()
         self.load_model(epochs=epochs_to_load_from)
         test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
@@ -280,6 +281,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         test_accuracy_metric = tf.metrics.Accuracy()
         test_loss_metric = tf.metrics.Mean()
+
+        accs = list()
+        losses = list()
 
         for tmb, lmb in self.test_dataset:
             for task, labels in zip(tmb, lmb):
@@ -290,7 +294,15 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 # mean and variance from the batch which is given. Make sure to do the same thing in validation.
                 updated_model_logits = updated_model(val_ds, training=True)
 
-                self.update_loss_and_accuracy(updated_model_logits, val_labels, test_loss_metric, test_accuracy_metric)
+                val_acc, val_loss = self.update_loss_and_accuracy(
+                    updated_model_logits,
+                    val_labels,
+                    test_loss_metric,
+                    test_accuracy_metric
+                )
+                losses.append(val_loss)
+                accs.append(val_acc)
+
 
             self.log_metric(test_summary_writer, 'Loss', test_loss_metric, step=1)
             self.log_metric(test_summary_writer, 'Accuracy', test_accuracy_metric, step=1)
@@ -298,6 +310,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
             print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
 
+        print(f'loss mean: {np.mean(losses)}')
+        print(f'loss std: {np.std(losses)}')
+        print(f'accuracy mean: {np.mean(accs)}')
+        print(f'accuracy std: {np.std(accs)}')
         return test_accuracy_metric.result().numpy()
 
     def log_images(self, summary_writer, train_ds, val_ds, step):
@@ -329,6 +345,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             real_labels,
             predicted_class_labels
         )
+        val_acc = tf.math.reduce_mean(tf.cast(tf.math.equal(real_labels, predicted_class_labels), tf.float32))
+
+        return val_acc, val_loss
 
     def log_metric(self, summary_writer, name, metric, step):
         with summary_writer.as_default():

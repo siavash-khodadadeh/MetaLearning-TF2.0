@@ -20,9 +20,6 @@ def average_gradients(tower_grads, losses):
 
 def SP(data, K):
     A = data
-    N = np.linalg.norm(A, axis=0)
-    B = A / N
-    B = np.transpose(B)
 
     indices = np.random.choice(range(data.shape[1]), K, replace=False)
 
@@ -43,6 +40,10 @@ def SP(data, K):
         # u1 = U[:, 0]
         # v = V[:, 1]
         u = svd.components_.reshape(-1)
+
+        N = np.linalg.norm(At, axis=0)
+        B = At / N
+        B = np.transpose(B)
 
         Cr = np.abs(np.matmul(B, u))
         # ind = np.argsort(Cr)[::-1]

@@ -81,7 +81,8 @@ class Database(ABC):
             model,
             (224, 224),
             4096,
-            tf.keras.applications.inception_v3.preprocess_input
+            None
+            # tf.keras.applications.inception_v3.preprocess_input
         )
 
     def dump_features(self, dataset_partition, name, model, input_shape, feature_size, preprocess_fn):
@@ -293,6 +294,49 @@ class Database(ABC):
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
 
+        return dataset
+
+    def get_meta_learning_dataset_from_clusters(
+            self,
+            clusters_dir,
+            n,
+            k,
+            meta_batch_size,
+            one_hot_labels=True,
+            reshuffle_each_iteration=True,
+    ):
+        classes = sorted([os.path.join(clusters_dir, file_address) for file_address in os.listdir(clusters_dir)])
+        steps_per_epoch = len(classes) // n // meta_batch_size
+        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
+
+        def _get_instances(k):
+            def get_instances(cluster_id_file_address):
+                cluster_instances = tf.strings.split(tf.io.read_file(cluster_id_file_address), '\n')[:-1]
+                cluster_dataset = tf.data.Dataset.from_tensor_slices(cluster_instances)
+                cluster_dataset = cluster_dataset.shuffle(buffer_size=1000)
+                return cluster_dataset.take(2 * k)
+
+            return get_instances
+
+        dataset = tf.data.Dataset.from_tensor_slices(classes)
+        dataset = dataset.shuffle(buffer_size=len(classes), reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.interleave(
+            _get_instances(k),
+            cycle_length=n,
+            block_length=k,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+
+        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+
+        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.batch(n, drop_remainder=True)
+        dataset = dataset.batch(2, drop_remainder=True)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
     def get_supervised_meta_learning_dataset(
