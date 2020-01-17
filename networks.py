@@ -71,6 +71,24 @@ class SimpleModel(tf.keras.Model):
         return out
 
 
+class SimpleModelFeature(SimpleModel):
+    def call(self, inputs, training=False):
+        image = inputs
+        c1 = self.conv_block(image, self.conv1, self.bn1, training=training)
+        c2 = self.conv_block(c1, self.conv2, self.bn2, training=training)
+        c3 = self.conv_block(c2, self.conv3, self.bn3, training=training)
+        c4 = self.conv_block(c3, self.conv4, self.bn4, training=training)
+        f = self.flatten(c4)
+        out = self.dense(f)
+
+        return out
+
+    def get_sequential_model(self):
+        x = Input(shape=(28, 28, 1))
+        return tf.keras.models.Model(inputs=[x], outputs=self.call(x))
+
+
+
 class MiniImagenetModel(tf.keras.Model):
     name = 'MiniImagenetModel'
 
@@ -111,3 +129,36 @@ class MiniImagenetModel(tf.keras.Model):
         out = self.dense(f)
 
         return out
+
+
+class MiniImagenetFeature(MiniImagenetModel):
+    def __init__(self, num_classes):
+        super(MiniImagenetFeature, self).__init__(num_classes)
+        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
+        self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
+        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
+        self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
+        self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
+        self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
+        self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
+        self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
+        self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
+
+        self.flatten = Flatten(name='flatten')
+
+        self.dense = Dense(num_classes, activation=None, name='dense')
+
+    def call(self, inputs, training=False):
+        image = inputs
+        c1 = self.conv_block(image, self.conv1, self.bn1, training=training)
+        c2 = self.conv_block(c1, self.conv2, self.bn2, training=training)
+        c3 = self.conv_block(c2, self.conv3, self.bn3, training=training)
+        c4 = self.conv_block(c3, self.conv4, self.bn4, training=training)
+        f = self.flatten(c4)
+        out = self.dense(f)
+
+        return out
+
+    def get_sequential_model(self):
+        x = Input(shape=(84, 84, 3))
+        return tf.keras.models.Model(inputs=[x], outputs=self.call(x))

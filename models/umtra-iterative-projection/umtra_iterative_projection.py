@@ -32,6 +32,7 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
             least_number_of_tasks_val_test=-1,  # Make sure the val and test dataset pick at least this many tasks.
             clip_gradients=False,
+            experiment_name=None,
     ):
         super(UMTRAIterativeProjection, self).__init__(
             database=database,
@@ -47,7 +48,8 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
             least_number_of_tasks_val_test=least_number_of_tasks_val_test,
-            clip_gradients=clip_gradients
+            clip_gradients=clip_gradients,
+            experiment_name=experiment_name
         )
 
     def get_root(self):
@@ -220,26 +222,41 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
         return norm_nim
 
     def idea_3(self, A, inds, k):
-        n_classes = 5
+        n_classes = self.n
         data_points = list()
 
-        norm_values = np.linalg.norm(A, 2, axis=0)
-        A = A / norm_values
-
-        B = np.copy(A)
-        B[:, inds] = np.zeros((A.shape[0], len(inds)))
+        a = np.copy(A[:, inds])
+        A[:, inds] = 1000000000 * np.ones((A.shape[0], len(inds)))
 
         for i in range(n_classes):
-            dot_product_values = np.matmul(np.transpose(A[:, inds[i]]), B)
-            ind_j = np.argmax(np.abs(dot_product_values))
+            res = np.sum(np.square(A - a[:, i].reshape((4096, 1))), axis=0)
+            closest = np.argmin(res)
             data_points.append(inds[i])
-            data_points.append(ind_j)
+            data_points.append(closest)
+            # print(inds[i])
+            # print(closest)
+
+        # Cosine Distance
+        # norm_values = np.linalg.norm(A, 2, axis=0)
+        # A = A / norm_values
+        #
+        # B = np.copy(A)
+        # B[:, inds] = np.zeros((A.shape[0], len(inds)))
+        #
+        # for i in range(n_classes):
+        #     dot_product_values = np.matmul(np.transpose(A[:, inds[i]]), B)
+        #     ind_j = np.argmax(np.abs(dot_product_values))
+        #     data_points.append(inds[i])
+        #     data_points.append(ind_j)
+
             # print(inds[i])
             # print(ind_j)
 
         # the list of all elements: 1, 1, 2, 2, 3, 3, 4, 4, 5, 5
+        # it should be 1, 2, 3, 4, 5, 1, 2, 3, 4, 5
+        # Another example: 1, 1, 2, 2 should be 1, 2, 1, 2
+        data_points = np.concatenate((data_points[::2], data_points[1::2]))
         return data_points
-
 
     def idea_2(self, A, inds, k):
         n_classes = 5
@@ -277,7 +294,6 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
 
         # the list of all elements: 1, 1, 2, 2, 3, 3, 4, 4, 5, 5
         return data_points
-
 
     def idea_1(self, A, inds, k):
         data_points = list()
@@ -319,29 +335,41 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
         return data_points
 
     def get_test_dataset(self):
-        self.database.get_attributes_task_dataset(partition='test', k=self.k, meta_batch_size=1)
+        return self.database.get_attributes_task_dataset(partition='test', k=self.k, meta_batch_size=1)
+
+    def get_train_dataset2(self):
+        return self.database.get_attributes_task_dataset(
+            partition='train',
+            k=self.k,
+            meta_batch_size=self.meta_batch_size
+        )
 
     def get_val_dataset(self):
-        val_dataset = self.database.get_supervised_meta_learning_dataset(
-            self.database.val_folders,
-            n=self.n,
-            k=self.k,
-            meta_batch_size=1,
-            reshuffle_each_iteration=True
-        )
-        steps_per_epoch = max(val_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
-        val_dataset = val_dataset.repeat(-1)
+        # val_dataset = self.database.get_supervised_meta_learning_dataset(
+        #     self.database.val_folders,
+        #     n=self.n,
+        #     k=self.k,
+        #     meta_batch_size=1,
+        #     reshuffle_each_iteration=True
+        # )
+        # steps_per_epoch = max(val_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
+        # val_dataset = val_dataset.repeat(-1)
+        # val_dataset = val_dataset.take(steps_per_epoch)
+        # setattr(val_dataset, 'steps_per_epoch', steps_per_epoch)
+        # return val_dataset
+        val_dataset = self.database.get_attributes_task_dataset(partition='val', k=self.k, meta_batch_size=1)
+        steps_per_epoch = min(val_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
         val_dataset = val_dataset.take(steps_per_epoch)
+
         setattr(val_dataset, 'steps_per_epoch', steps_per_epoch)
         return val_dataset
 
-
     def get_train_dataset(self):
-        k = 5
-        num_tasks = 20000
+        k = 2
+        num_tasks = 10000
 
         data, sampled_files, dir_path = self.prepare_data()
-        tasks_address = os.path.join(dir_path, f'tasks_{num_tasks}.npy')
+        tasks_address = os.path.join(dir_path, f'tasks_{num_tasks}_n_{self.n}.npy')
 
         if os.path.exists(tasks_address):
             tasks = np.load(tasks_address)
@@ -353,12 +381,15 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
                 if i % 100 == 0:
                     print(f'{i} tasks are generated out of {num_tasks}')
 
-                cols = np.random.choice(data.shape[1], 2000, replace=False)
+                # cols = np.random.choice(data.shape[1], 2000, replace=False)
+                # task_data_points = data[:, cols]
+                # task_sampled_files = sampled_files[cols]
+                # inds = self.SP(task_data_points, k)
+
+                cols = np.random.choice(data.shape[1], data.shape[1], replace=False)
                 task_data_points = data[:, cols]
                 task_sampled_files = sampled_files[cols]
-
-                inds = self.SP(task_data_points, k)
-                # inds = np.random.randint(0, 2000, size=k)
+                inds = cols[:k]
 
                 selected_data_points = self.idea_3(task_data_points, inds, k)
 
@@ -373,7 +404,7 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
         dataset = self.database.get_dataset_from_tasks_directly(
             tasks,
             self.n,
-            self.k,
+            1,
             self.meta_batch_size
         )
 
@@ -387,12 +418,16 @@ class UMTRAIterativeProjection(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_config_info(self):
-        return f'umtra_' \
+        config_str = f'umtra_' \
                f'model-{self.network_cls.name}_' \
                f'mbs-{self.meta_batch_size}_' \
                f'n-{self.n}_' \
                f'k-{self.k}_' \
                f'stp-{self.num_steps_ml}'
+        if self.experiment_name != '':
+            config_str += '_' + self.experiment_name
+
+        return config_str
 
 
 def run_omniglot():
@@ -446,18 +481,20 @@ def run_celeba():
     umtra = UMTRAIterativeProjection(
         database=celeba_dataset,
         network_cls=MiniImagenetModel,
-        n=5,
-        meta_batch_size=4,
+        n=2,
+        meta_batch_size=8,
         num_steps_ml=5,
-        lr_inner_ml=0.01,
+        lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_epochs=5,
         meta_learning_rate=0.001,
         log_train_images_after_iteration=10,
-        report_validation_frequency=1,
+        least_number_of_tasks_val_test=50,
+        report_validation_frequency=100,
+        experiment_name='euclidean_random'
     )
 
-    # umtra.train(epochs=100)
+    umtra.train(epochs=21)
     umtra.evaluate(iterations=50)
 
 
