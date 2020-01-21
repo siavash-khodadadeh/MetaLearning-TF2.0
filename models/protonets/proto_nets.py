@@ -3,7 +3,7 @@ import os
 import tensorflow as tf
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from networks import SimpleModelProto
+from networks.proto_networks import SimpleModelProto
 from tf_datasets import OmniglotDatabase
 
 

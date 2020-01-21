@@ -5,7 +5,7 @@ import tensorflow_addons as tfa
 import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from networks import SimpleModel, MiniImagenetModel
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase
 
 

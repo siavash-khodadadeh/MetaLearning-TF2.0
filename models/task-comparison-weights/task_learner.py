@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 from models.base_model import BaseModel
-from networks import SimpleModel
+from networks.maml_umtra_networks import SimpleModel
 from tf_datasets import OmniglotDatabase
 from utils import combine_first_two_axes
 
