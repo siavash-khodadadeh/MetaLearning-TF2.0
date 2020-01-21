@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase
-from networks import SimpleModel, MiniImagenetModel
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 
 
 class MAMLRandomSelection(ModelAgnosticMetaLearningModel):

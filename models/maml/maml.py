@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
-from networks import SimpleModel, MiniImagenetModel
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 from models.base_model import BaseModel
 from utils import combine_first_two_axes, average_gradients
 import settings

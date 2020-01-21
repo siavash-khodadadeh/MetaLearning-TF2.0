@@ -4,9 +4,11 @@ import pickle
 import tensorflow as tf
 import numpy as np
 from sklearn.cluster import KMeans
+from tqdm import tqdm
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from networks import SimpleModel, MiniImagenetModel, SimpleModelFeature, MiniImagenetFeature
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
+from networks.sml_feature_networks import SimpleModelFeature, MiniImagenetFeature, VariationalAutoEncoderFeature
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
 
 
@@ -179,6 +181,7 @@ def sample_data_points(classes_dirs, n_samples):
 
 
 def make_features_dataset_mini_imagenet(data, labels, non_labeled_data):
+    non_labeled_data = np.concatenate((data, non_labeled_data))
     label_values = np.unique(labels)
     depth = len(label_values)
     label_to_index = {label_value: i for i, label_value in enumerate(label_values)}
@@ -187,19 +190,28 @@ def make_features_dataset_mini_imagenet(data, labels, non_labeled_data):
     x_dataset = tf.data.Dataset.from_tensor_slices(data)
     y_dataset = tf.data.Dataset.from_tensor_slices(labels)
 
-    def _parse_image_label_pair(image_file, label):
+    def _parse_image(image_file):
         image = tf.image.decode_jpeg(tf.io.read_file(image_file))
         image = tf.image.resize(image, (84, 84))
         image = tf.cast(image, tf.float32)
+        return image / 255.
 
+    def _parse_image_label_pair(image_file, label):
+        image = _parse_image(image_file)
         label = tf.one_hot(label, depth=depth)
-        return image / 255., label
+        return image, label
 
     dataset = tf.data.Dataset.zip((x_dataset, y_dataset))
     dataset = dataset.map(_parse_image_label_pair)
 
+    non_labeled_dataset = tf.data.Dataset.from_tensor_slices(non_labeled_data)
+    non_labeled_dataset = non_labeled_dataset.map(_parse_image)
+
+    dataset = tf.data.Dataset.zip((dataset, non_labeled_dataset))
     dataset = dataset.shuffle(buffer_size=len(data))
     dataset = dataset.batch(32, drop_remainder=True)
+
+    # dataset = dataset.cache()
 
     return dataset, depth
 
@@ -230,7 +242,7 @@ def make_features_dataset_omniglot(data, labels, non_labeled_data):
     return dataset, depth
 
 
-def train_the_feature_model(sequential_model, dataset, n_classes, input_shape):
+def train_the_feature_model2(sequential_model, dataset, n_classes, input_shape):
     features = sequential_model.layers[-2].output
     y_hat = tf.keras.layers.Dense(n_classes, activation='softmax')(features)
 
@@ -241,6 +253,63 @@ def train_the_feature_model(sequential_model, dataset, n_classes, input_shape):
     model.fit(dataset, epochs=90)
     model = tf.keras.models.Model(inputs=model.input, outputs=model.layers[-2].output)
     return model
+
+
+def train_the_feature_model(feature_model, dataset, n_classes, input_shape):
+    optimizer = tf.keras.optimizers.Adam()
+
+    @tf.function
+    def train_on_batch(x, y, x_unsupervised):
+        classification_coefficient = 3200
+        with tf.GradientTape() as tape:
+            # tf,concatenate((x, x_unsupervised), axis=0)
+            vae_loss = feature_model.compute_vae_loss(x_unsupervised)
+            classification_loss, classification_acc = feature_model.compute_classification_loss(x, y)
+            classification_loss *= classification_coefficient
+            grads = tape.gradient(vae_loss + classification_loss, feature_model.trainable_variables)
+        return grads, vae_loss, classification_loss, classification_acc
+
+    def train_network():
+        iteration_counter = 0
+        for epoch in range(100):
+            print(f'================\nEpoch {epoch}:')
+            vae_losses = list()
+            classification_losses = list()
+            classification_accs = list()
+
+            for item in tqdm(dataset):
+                (x, y), x_unsupervised = item
+                grads,  vae_loss, classification_loss, classification_acc = train_on_batch(x, y, x_unsupervised)
+                classification_losses.append(classification_loss)
+                classification_accs.append(classification_acc)
+                vae_losses.append(vae_loss)
+                optimizer.apply_gradients(zip(grads, feature_model.trainable_variables))
+                iteration_counter += 1
+
+            # print(f'Reconstruction loss: {np.mean(reconstruction_losses)}')
+            print(f'Classification loss: {np.mean(classification_losses)}')
+            print(f'Classification acc: {np.mean(classification_accs)}')
+            # print(f'KLD loss: {np.mean(kld_losses)}')
+            print(f'VAE loss: {np.mean(vae_losses)}')
+
+            if epoch % 10 == 0:
+                feature_model.save_weights(filepath=f'./feature_models/feature_model_{epoch}')
+
+    # feature_model.load_weights(filepath='./feature_models/feature_model')
+    train_network()
+    feature_model.save_weights(filepath='./feature_models/feature_model')
+
+    for item in dataset.take(1):
+        (x, y), x_unsupervised = item
+        mean, var = feature_model.encode(x)
+        z = feature_model.reparameterize(mean, var)
+        x_logit = feature_model.decode(z, apply_sigmoid=True)
+
+        for image in (x[0, ...], x_logit[0, ...]):
+            import matplotlib.pyplot as plt
+            print(image.shape)
+            plt.imshow(image)
+            plt.show()
 
 
 def run_omniglot():
@@ -282,20 +351,20 @@ def run_omniglot():
 
 def run_mini_imagenet():
     mini_imagenet_database = MiniImagenetDatabase(random_seed=-1)
-    # n_data_points = 10000
-    # data_points, classes, non_labeled_data_points = sample_data_points(
-    #     mini_imagenet_database.train_folders,
-    #     n_data_points
-    # )
-    # features_dataset, n_classes = make_features_dataset_mini_imagenet(data_points, classes, non_labeled_data_points)
-    # feature_model = MiniImagenetFeature(num_classes=5).get_sequential_model()
-    # feature_model = train_the_feature_model(
-    #     feature_model,
-    #     features_dataset,
-    #     n_classes,
-    #     mini_imagenet_database.input_shape
-    # )
-    feature_model = None
+    n_data_points = 10000
+    data_points, classes, non_labeled_data_points = sample_data_points(
+        mini_imagenet_database.train_folders,
+        n_data_points
+    )
+    features_dataset, n_classes = make_features_dataset_mini_imagenet(data_points, classes, non_labeled_data_points)
+    feature_model = VariationalAutoEncoderFeature(input_shape=(84, 84, 3), latent_dim=32, n_classes=n_classes)
+    feature_model = train_the_feature_model(
+        feature_model,
+        features_dataset,
+        n_classes,
+        mini_imagenet_database.input_shape
+    )
+    # feature_model = None
 
     sml = SML(
         database=mini_imagenet_database,
@@ -313,12 +382,12 @@ def run_mini_imagenet():
         feature_size=288,
         input_shape=(84, 84, 3),
         log_train_images_after_iteration=50,
-        least_number_of_tasks_val_test=50,
+        least_number_of_tasks_val_test=1000,
         report_validation_frequency=50,
         experiment_name='mini_imagenet_model_feature_10000_clusters_500'
     )
 
-    sml.train(epochs=4001)
+    # sml.train(epochs=4001)
     # sml.evaluate(iterations=50)
 
 
