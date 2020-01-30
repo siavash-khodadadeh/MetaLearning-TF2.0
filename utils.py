@@ -118,33 +118,82 @@ def SP_deterministic(data, K):
     return inds
 
 
-if __name__ == '__main__':
+def SSP(features, labels, K, delta=10):
+    label_values = np.unique(labels)
+    num_classes = len(label_values)
 
-    data = np.random.rand(40, 73)
-    A = data
+    label_matrix = np.zeros((len(label_values), len(labels)))
+    for i, label in enumerate(labels):
+        label_matrix[label, i] = delta
 
-    indices = SP(data, 5)
-    A3 = A[:, indices]
-    At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
-                       np.matmul(np.transpose(A3), A))
+    A = np.concatenate((features, label_matrix), axis=0)
+    At = np.copy(A)
 
-    norm = np.linalg.norm(At)
-    print(norm)
+    inds = np.zeros(num_classes * K, )
+    inds = inds.astype(int)
+    iter = 0
 
-    for test_case in range(1000):
-        rand_numbers = np.random.randint(0, 73, size=5)
-        A3 = A[:, rand_numbers]
+    counter = 0
+    for k in range(0, K):
+        iter = iter + 1
+        # Compute just the first column from U and V
+        svd = TruncatedSVD(n_components=1)
+        svd.fit(np.transpose(At))
+        # [U, S, V] = np.linalg.svd(At, full_matrices=False)
+        # u1 = U[:, 0]
+        # v = V[:, 1]
+        u = svd.components_.reshape(-1)
+        N = np.linalg.norm(At, axis=0)
+        B = At / N
+        B = np.transpose(B)
+        Cr = np.abs(np.matmul(B, u))
+
+        for label_value in label_values:
+            x = np.multiply(Cr, A[features.shape[0] + label_value, ...])
+            ind = np.argsort(x)[::-1]
+            inds[counter] = np.random.choice((ind[0], ind[1], ind[2]), 1, p=(0.6, 0.3, 0.1))
+            counter += 1
+
+        A3 = A[:, inds[0:counter + 1]]
         At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
                            np.matmul(np.transpose(A3), A))
-        current_norm = np.linalg.norm(At)
 
-        print(current_norm)
-        assert(current_norm >= norm)
+    return inds
 
-    print(norm)
-    indices = SP_deterministic(data, 5)
-    A3 = A[:, indices]
-    At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
-                       np.matmul(np.transpose(A3), A))
 
-    print(np.linalg.norm(At))
+if __name__ == '__main__':
+    features = np.random.rand(4096, 8600)
+    labels = [0] * 2000 + [1] * 4000 + [2] * 2600
+
+    indices = SSP(features, labels, 2)
+    print(indices)
+
+
+    # data = np.random.rand(40, 73)
+    # A = data
+    #
+    # indices = SP(data, 5)
+    # A3 = A[:, indices]
+    # At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
+    #                    np.matmul(np.transpose(A3), A))
+    #
+    # norm = np.linalg.norm(At)
+    # print(norm)
+    #
+    # for test_case in range(1000):
+    #     rand_numbers = np.random.randint(0, 73, size=5)
+    #     A3 = A[:, rand_numbers]
+    #     At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
+    #                        np.matmul(np.transpose(A3), A))
+    #     current_norm = np.linalg.norm(At)
+    #
+    #     print(current_norm)
+    #     assert(current_norm >= norm)
+    #
+    # print(norm)
+    # indices = SP_deterministic(data, 5)
+    # A3 = A[:, indices]
+    # At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
+    #                    np.matmul(np.transpose(A3), A))
+    #
+    # print(np.linalg.norm(At))

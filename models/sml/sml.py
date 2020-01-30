@@ -55,7 +55,7 @@ class SML(ModelAgnosticMetaLearningModel):
         )
         self.features_model = feature_model
         self.n_clusters = n_clusters
-        self.feature_size = feature_size
+        self.feature_size = 2 * self.features_model.latent_dim
         self.input_shape = input_shape
         self.preprocess_fn = preprocess_function
 
@@ -91,7 +91,8 @@ class SML(ModelAgnosticMetaLearningModel):
             if self.preprocess_fn is not None:
                 img = self.preprocess_fn(img)
 
-            features[index, :] = self.features_model.predict(img).reshape(-1)
+            # features[index, :] = self.features_model.predict(img).reshape(-1)
+            features[index, :] = self.features_model.encode(img).reshape(-1)
 
         if dir_name is not None:
             os.makedirs(dir_name)
@@ -255,11 +256,11 @@ def train_the_feature_model2(sequential_model, dataset, n_classes, input_shape):
     return model
 
 
-def train_the_feature_model(feature_model, dataset, n_classes, input_shape):
+def train_the_feature_model(fm, dataset, n_classes, input_shape):
     optimizer = tf.keras.optimizers.Adam()
 
     @tf.function
-    def train_on_batch(x, y, x_unsupervised):
+    def train_on_batch(feature_model, x, y, x_unsupervised):
         classification_coefficient = 3200
         with tf.GradientTape() as tape:
             # tf,concatenate((x, x_unsupervised), axis=0)
@@ -269,9 +270,9 @@ def train_the_feature_model(feature_model, dataset, n_classes, input_shape):
             grads = tape.gradient(vae_loss + classification_loss, feature_model.trainable_variables)
         return grads, vae_loss, classification_loss, classification_acc
 
-    def train_network():
+    def train_network(feature_model, dataset):
         iteration_counter = 0
-        for epoch in range(100):
+        for epoch in range(21, 501):
             print(f'================\nEpoch {epoch}:')
             vae_losses = list()
             classification_losses = list()
@@ -279,7 +280,9 @@ def train_the_feature_model(feature_model, dataset, n_classes, input_shape):
 
             for item in tqdm(dataset):
                 (x, y), x_unsupervised = item
-                grads,  vae_loss, classification_loss, classification_acc = train_on_batch(x, y, x_unsupervised)
+                grads,  vae_loss, classification_loss, classification_acc = train_on_batch(
+                    feature_model, x, y, x_unsupervised
+                )
                 classification_losses.append(classification_loss)
                 classification_accs.append(classification_acc)
                 vae_losses.append(vae_loss)
@@ -292,24 +295,31 @@ def train_the_feature_model(feature_model, dataset, n_classes, input_shape):
             # print(f'KLD loss: {np.mean(kld_losses)}')
             print(f'VAE loss: {np.mean(vae_losses)}')
 
-            if epoch % 10 == 0:
+            if epoch != 0 and epoch % 500 == 0:
                 feature_model.save_weights(filepath=f'./feature_models/feature_model_{epoch}')
 
-    # feature_model.load_weights(filepath='./feature_models/feature_model')
-    train_network()
-    feature_model.save_weights(filepath='./feature_models/feature_model')
+    epoch = 20
+    for item in dataset:
+        (x, y), x_unsupervised = item
+        print(y)
+        grads, vae_loss, classification_loss, classification_acc = train_on_batch(fm, x, y, x_unsupervised)
+        break
 
+    fm.load_weights(filepath=f'./feature_models/feature_model_{epoch}')
+    train_network(fm, dataset)
     for item in dataset.take(1):
         (x, y), x_unsupervised = item
-        mean, var = feature_model.encode(x)
-        z = feature_model.reparameterize(mean, var)
-        x_logit = feature_model.decode(z, apply_sigmoid=True)
+        mean, var = fm.encode(x)
+        z = fm.reparameterize(mean, var)
+        x_logit = fm.decode(z, apply_sigmoid=True)
 
         for image in (x[0, ...], x_logit[0, ...]):
             import matplotlib.pyplot as plt
             print(image.shape)
             plt.imshow(image)
             plt.show()
+
+    return fm
 
 
 def run_omniglot():
@@ -342,10 +352,10 @@ def run_omniglot():
         input_shape=(28, 28, 1),
         log_train_images_after_iteration=10,
         report_validation_frequency=10,
-        experiment_name='omniglot_simple_model_feature_10000'
+        experiment_name='omniglot_vae_model_feature_10000'
     )
 
-    # sml.train(epochs=101)
+    sml.train(epochs=101)
     # sml.evaluate(iterations=50)
 
 
