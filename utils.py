@@ -151,7 +151,7 @@ def SSP(features, labels, K, delta=10):
         for label_value in label_values:
             x = np.multiply(Cr, A[features.shape[0] + label_value, ...])
             ind = np.argsort(x)[::-1]
-            inds[counter] = np.random.choice((ind[0], ind[1], ind[2]), 1, p=(0.6, 0.3, 0.1))
+            inds[counter] = np.random.choice((ind[0], ind[1], ind[2], ind[3]), 1, p=(0.5, 0.3, 0.1, 0.1))
             counter += 1
 
         A3 = A[:, inds[0:counter + 1]]
