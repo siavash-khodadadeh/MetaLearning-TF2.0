@@ -118,6 +118,59 @@ def SP_deterministic(data, K):
     return inds
 
 
+def SSP_with_random_validation_set(features, labels, K, delta=20):
+    label_values = np.unique(labels)
+    num_classes = len(label_values)
+
+    label_matrix = np.zeros((len(label_values), len(labels)))
+    for i, label in enumerate(labels):
+        label_matrix[label, i] = delta
+
+    A = np.concatenate((features, label_matrix), axis=0)
+    At = np.copy(A)
+
+    inds = np.zeros(num_classes * K, )
+    inds = inds.astype(int)
+    iter = 0
+
+    counter = 0
+    chosen_indices = list()
+
+    for k in range(0, K // 2):
+        iter = iter + 1
+        # Compute just the first column from U and V
+        svd = TruncatedSVD(n_components=1)
+        svd.fit(np.transpose(At))
+        # [U, S, V] = np.linalg.svd(At, full_matrices=False)
+        # u1 = U[:, 0]
+        # v = V[:, 1]
+        u = svd.components_.reshape(-1)
+        new_At = At[:4096, :]
+        N = np.linalg.norm(new_At, axis=0)
+        B = new_At / N
+        B = np.transpose(B)
+        Cr = np.abs(np.matmul(B, u[:4096]))
+
+        for label_value in label_values:
+            x = np.multiply(Cr, A[features.shape[0] + label_value, ...])
+            ind = np.argsort(x)
+            inds[label_value * K // 2 + counter] = np.random.choice((ind[-1], ind[-2], ind[-3], ind[-4]), 1, p=(0.5, 0.3, 0.1, 0.1))
+            chosen_indices.append(inds[label_value * K // 2 + counter])
+            validation_choices = np.array(np.where(x != 0)).reshape((-1, ))
+            inds[label_value * K // 2 + counter + 2 * num_classes] = np.random.choice(validation_choices, 1)
+
+        counter += 1
+        # return inds
+
+        if k != K // 2 - 1:
+            A3 = A[:, chosen_indices]
+            At = A - np.matmul(np.matmul(A3, np.linalg.pinv(np.matmul(np.transpose(A3), A3))),
+                               np.matmul(np.transpose(A3), A))
+
+    # print(inds)
+    return inds
+
+
 def SSP(features, labels, K, delta=10):
     label_values = np.unique(labels)
     num_classes = len(label_values)
@@ -162,10 +215,15 @@ def SSP(features, labels, K, delta=10):
 
 
 if __name__ == '__main__':
-    features = np.random.rand(4096, 8600)
-    labels = [0] * 2000 + [1] * 4000 + [2] * 2600
+    features = np.random.rand(4096, 12000)
+    labels = [0] * 2000 + [1] * 4000 + [2] * 2600 + [3] * 2000 + [4] * 1400
 
-    indices = SSP(features, labels, 2)
+    while True:
+
+        indices = SSP_with_random_validation_set(features, labels, 4)
+        print(indices)
+        if indices[0] == indices[2] or indices[1] == indices[3] or indices[2] == indices[4]:
+            break
     print(indices)
 
 
