@@ -363,8 +363,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             self.log_metric(test_summary_writer, 'Loss', test_loss_metric, step=1)
             self.log_metric(test_summary_writer, 'Accuracy', test_accuracy_metric, step=1)
 
-            # print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
-            # print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
+            print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
+            print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
 
         print(f'loss mean: {np.mean(losses)}')
         print(f'loss std: {np.std(losses)}')
