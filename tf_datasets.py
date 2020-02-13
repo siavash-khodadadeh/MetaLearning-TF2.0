@@ -632,7 +632,7 @@ class Database(ABC):
         steps_per_epoch = len(folders) // (n * meta_batch_size)
         dataset = tf.data.Dataset.from_tensor_slices(folders)
         dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.map(_get_instances)
+        dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(n, drop_remainder=True)
 
