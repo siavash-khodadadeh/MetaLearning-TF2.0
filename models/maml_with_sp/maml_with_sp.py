@@ -6,15 +6,15 @@ from tf_datasets import CelebADatabase, MiniImagenetDatabase
 
 
 class MAMLWithSP(ModelAgnosticMetaLearningModel):
-    def get_train_dataset(self):
-        dataset = self.database.get_sp_meta_learning_dataset(
-            self.database.train_folders,
-            n=self.n,
-            k=self.k,
-            meta_batch_size=self.meta_batch_size,
-            features_name='vgg19_last_hidden_layer_train'
-        )
-        return dataset
+    # def get_train_dataset(self):
+    #     dataset = self.database.get_sp_meta_learning_dataset(
+    #         self.database.train_folders,
+    #         n=self.n,
+    #         k=self.k,
+    #         meta_batch_size=self.meta_batch_size,
+    #         features_name='vgg19_last_hidden_layer_train'
+    #     )
+    #     return dataset
 
     # def get_test_dataset(self):
     #     test_dataset = self.database.get_supervised_meta_learning_dataset(
@@ -104,15 +104,10 @@ def run_mini_imagenet():
             meta_learning_rate=0.001,
             report_validation_frequency=250,
             log_train_images_after_iteration=1000,
-            least_number_of_tasks_val_test=1000,
+            least_number_of_tasks_val_test=100,
             clip_gradients=True,
-            # experiment_name='mini_imagenet_no_confusion_sp_and_random_random_seed_-1',
-            # experiment_name='mini_imagenet_difficult_tasks',
-            # experiment_name='mini_imagenet_sp_random_seed_-1',
-            # experiment_name='mini_imagenet_new_exact_maml_random_seed_-1',
-
-            # experiment_name='mini_imagenet_no_confusion_sp_with_random_validation_set',
-            experiment_name='mini_imagenet_no_confusion_sp_with_random_validation_set_delta_20',
+            experiment_name='mini_imagenet_new_exact_maml_random_seed_-1',
+            # experiment_name='mini_imagenet_no_confusion_sp_with_random_validation_set_delta_20',
         )
 
         maml.train(epochs=20001)

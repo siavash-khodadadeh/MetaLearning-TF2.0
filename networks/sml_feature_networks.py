@@ -39,7 +39,7 @@ class VariationalAutoEncoderFeature(tf.keras.models.Model):
         )
 
         self.encoder_dense = tf.keras.layers.Dense(latent_dim + latent_dim, activation=None)
-        self.classificatino_dense = tf.keras.layers.Dense(n_classes, activation=None)
+        self.classification_dense = tf.keras.layers.Dense(n_classes, activation=tf.keras.activations.softmax)
 
         self.decoder = tf.keras.Sequential(
             (
@@ -78,7 +78,7 @@ class VariationalAutoEncoderFeature(tf.keras.models.Model):
 
     def classify(self, x):
         encoder_output = self.encoder_dense(self.encoder(x))
-        y_hat = self.classificatino_dense(encoder_output)
+        y_hat = self.classification_dense(encoder_output)
         return y_hat
 
     def reparameterize(self, mean, logvar):
@@ -128,7 +128,7 @@ class SimpleModelFeature(SimpleModel):
         return out
 
     def get_sequential_model(self):
-        x = Input(shape=(28, 28, 1))
+        x = tf.keras.layers.Input(shape=(28, 28, 1))
         return tf.keras.models.Model(inputs=[x], outputs=self.call(x))
 
 
@@ -161,5 +161,5 @@ class MiniImagenetFeature(MiniImagenetModel):
         return out
 
     def get_sequential_model(self):
-        x = Input(shape=(84, 84, 3))
+        x = tf.keras.layers.Input(shape=(28, 28, 1))
         return tf.keras.models.Model(inputs=[x], outputs=self.call(x))
