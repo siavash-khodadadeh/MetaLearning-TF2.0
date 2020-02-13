@@ -148,8 +148,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         variables = list()
 
         for i in range(len(model.layers)):
-            if isinstance(model.layers[i], tf.keras.layers.Conv2D) or \
-             isinstance(model.layers[i], tf.keras.layers.Dense):
+            if (isinstance(model.layers[i], tf.keras.layers.Conv2D) or
+                    isinstance(model.layers[i], tf.keras.layers.Dense)):
                 updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
                 k += 1
                 variables.append(updated_model.layers[i].kernel)
@@ -168,8 +168,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     k += 1
                     variables.append(updated_model.layers[i].gamma)
                 if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                    updated_model.layers[i].beta = \
-                        model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                    updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
                     k += 1
                     variables.append(updated_model.layers[i].beta)
 
@@ -179,11 +178,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     k += 1
                     variables.append(updated_model.layers[i].gamma)
                 if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                    updated_model.layers[i].beta = \
-                        model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                    updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
                     k += 1
                     variables.append(updated_model.layers[i].beta)
-
 
         setattr(updated_model, 'meta_trainable_variables', variables)
 
@@ -275,23 +272,25 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return epoch_count
 
-    @tf.function
-    def get_losses_of_tasks_batch_evaluation(self, inputs):
-        train_ds, val_ds, train_labels, val_labels, iterations = inputs
+    def get_losses_of_tasks_batch_evaluation(self, iterations):
+        @tf.function
+        def f(inputs):
+            train_ds, val_ds, train_labels, val_labels = inputs
+            train_ds = combine_first_two_axes(train_ds)
+            val_ds = combine_first_two_axes(val_ds)
 
-        train_ds = combine_first_two_axes(train_ds)
-        val_ds = combine_first_two_axes(val_ds)
+            updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
+            updated_model_logits = updated_model(val_ds, training=True)
+            val_loss = self.outer_loss(val_labels, updated_model_logits)
 
-        updated_model = self.inner_train_loop(train_ds, train_labels, 50)
-        updated_model_logits = updated_model(val_ds, training=True)
-        val_loss = self.outer_loss(val_labels, updated_model_logits)
+            predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
+            real_labels = self.convert_labels_to_real_labels(val_labels)
 
-        predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
-        real_labels = self.convert_labels_to_real_labels(val_labels)
+            val_acc = tf.reduce_mean(tf.cast(tf.equal(predicted_class_labels, real_labels), tf.float32))
 
-        val_acc = tf.reduce_mean(tf.cast(tf.equal(predicted_class_labels, real_labels), tf.float32))
+            return val_acc, val_loss
 
-        return val_acc, val_loss
+        return f
 
     def evaluate(self, iterations, epochs_to_load_from=None):
         self.test_dataset = self.get_test_dataset()
@@ -304,15 +303,15 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         accs = list()
         losses = list()
+        losses_func = self.get_losses_of_tasks_batch_evaluation(iterations)
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
-                self.get_losses_of_tasks_batch_evaluation,
+                losses_func,
                 elems=(
                     train_ds,
                     val_ds,
                     train_labels,
                     val_labels,
-                    tf.ones(shape=(1, 1)) * iterations
                 ),
                 dtype=(tf.float32, tf.float32),
                 parallel_iterations=1
@@ -414,6 +413,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.val_accuracy_metric.reset_states()
 
         val_counter = 0
+        loss_func = self.get_losses_of_tasks_batch_evaluation(self.num_steps_validation)
         for (train_ds, val_ds), (train_labels, val_labels) in self.val_dataset:
             val_counter += 1
             if val_counter % 5 == 0:
@@ -424,13 +424,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
 
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
-                self.get_losses_of_tasks_batch_evaluation,
+                loss_func,
                 elems=(
                     train_ds,
                     val_ds,
                     train_labels,
                     val_labels,
-                    tf.ones(shape=(1, 1)) * self.num_steps_validation
                 ),
                 dtype=(tf.float32, tf.float32),
                 parallel_iterations=1
@@ -483,26 +482,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
     @tf.function
     def get_losses_of_tasks_batch(self, inputs):
-        task, labels, iteration_count = inputs
+        task, labels = inputs
 
         train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(task, labels)
-
-        if self.log_train_images_after_iteration != -1 and \
-                iteration_count % self.log_train_images_after_iteration == 0:
-
-            self.log_images(self.train_summary_writer, train_ds, val_ds, step=iteration_count)
-
-            with tf.device('cpu:0'):
-                with self.train_summary_writer.as_default():
-                    for var in self.model.variables:
-                        tf.summary.histogram(var.name, var, step=iteration_count)
-
-                    for k in range(len(self.updated_models)):
-                        var_count = 0
-                        if hasattr(self.updated_models[k], 'meta_trainable_variables'):
-                            for var in self.updated_models[k].meta_trainable_variables:
-                                var_count += 1
-                                tf.summary.histogram(f'updated_model_{k}_' + str(var_count), var, step=iteration_count)
 
         updated_model = self.inner_train_loop(train_ds, train_labels, -1)
         updated_model_logits = updated_model(val_ds, training=True)
@@ -531,10 +513,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 elems=(
                     tasks_meta_batch,
                     labels_meta_batch,
-                    tf.cast(tf.ones(self.meta_batch_size, 1) * iteration_count, tf.int64)
                 ),
                 dtype=tf.float32,
                 parallel_iterations=self.meta_batch_size
+                # parallel_iterations=1
             )
 
             # tasks_final_losses = tf.vectorized_map(
@@ -542,7 +524,6 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             #     elems=(
             #         tasks_meta_batch,
             #         labels_meta_batch,
-            #         tf.cast(tf.ones(self.meta_batch_size, 1) * iteration_count, tf.int64)
             #     ),
             # )
 
@@ -551,6 +532,26 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         if self.clip_gradients:
             outer_gradients = [tf.clip_by_value(grad, -10, 10) for grad in outer_gradients]
         self.optimizer.apply_gradients(zip(outer_gradients, self.model.trainable_variables))
+
+        if (self.log_train_images_after_iteration != -1 and
+                iteration_count % self.log_train_images_after_iteration == 0):
+
+            train_ds, val_ds, train_labels, val_labels = self.get_task_train_and_val_ds(
+                tasks_meta_batch[0, ...], labels_meta_batch[0, ...]
+            )
+            self.log_images(self.train_summary_writer, train_ds, val_ds, step=iteration_count)
+
+            with tf.device('cpu:0'):
+                with self.train_summary_writer.as_default():
+                    for var in self.model.variables:
+                        tf.summary.histogram(var.name, var, step=iteration_count)
+
+                    # for k in range(len(self.updated_models)):
+                    #     var_count = 0
+                    #     if hasattr(self.updated_models[k], 'meta_trainable_variables'):
+                    #         for var in self.updated_models[k].meta_trainable_variables:
+                    #             var_count += 1
+                    #     tf.summary.histogram(f'updated_model_{k}_' + str(var_count), var, step=iteration_count)
 
     def train(self, epochs=5):
         self.train_dataset = self.get_train_dataset()
@@ -632,8 +633,8 @@ def run_mini_imagenet():
         num_steps_validation=5,
         save_after_epochs=500,
         meta_learning_rate=0.001,
-        report_validation_frequency=50,
-        log_train_images_after_iteration=1000,
+        report_validation_frequency=5,
+        log_train_images_after_iteration=5,
         least_number_of_tasks_val_test=50,
         clip_gradients=True
     )
