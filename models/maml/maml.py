@@ -98,7 +98,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return os.path.dirname(__file__)
 
     def get_train_dataset(self):
-        dataset = self.database.get_supervised_meta_learning_dataset_new_version(
+        dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.train_folders,
             n=self.n,
             k=self.k,
@@ -110,7 +110,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return dataset
 
     def get_val_dataset(self):
-        val_dataset = self.database.get_supervised_meta_learning_dataset_new_version(
+        val_dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.val_folders,
             n=self.n,
             k=self.k,
@@ -125,7 +125,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return val_dataset
 
     def get_test_dataset(self):
-        test_dataset = self.database.get_supervised_meta_learning_dataset_new_version(
+        test_dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.test_folders,
             n=self.n,
             k=self.k,
@@ -643,30 +643,31 @@ def run_omniglot():
 
 
 def run_mini_imagenet():
-    mini_imagenet_database = MiniImagenetDatabase(random_seed=-1)
+    mini_imagenet_database = MiniImagenetDatabase()
 
     maml = ModelAgnosticMetaLearningModel(
         database=mini_imagenet_database,
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
-        k_val_ml=1,
+        k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        meta_batch_size=4,
+        meta_batch_size=8,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_epochs=400,
+        save_after_epochs=4000,
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=100,
-        clip_gradients=True
+        clip_gradients=True,
+        experiment_name='mini_imagenet'
     )
 
-    maml.train(epochs=2400)
-    maml.evaluate(50)
+    maml.train(epochs=20001)
+    # maml.evaluate(5)
 
 
 def run_celeba():

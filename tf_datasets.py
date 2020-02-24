@@ -4,58 +4,54 @@ import shutil
 import itertools
 from abc import ABC, abstractmethod
 import random
+from typing import Tuple, List, Callable, Dict
 
 import tensorflow as tf
 import numpy as np
 import tqdm
 
-from utils import SSP, SSP_with_random_validation_set
+from utils import SSP, SSP_with_random_validation_set, get_folders_with_greater_than_equal_k_files
 import settings
 
 
 class Database(ABC):
-    def __init__(self, raw_database_address, database_address, random_seed=-1):
-        if random_seed != -1:
-            random.seed(random_seed)
-            tf.random.set_seed(random_seed)
-            np.random.seed(random_seed)
-        
+    def __init__(self, raw_database_address: str, database_address: str, random_seed: int = -1):
+        """Random seed just sets the random seed for train, val and test folders selection. So if anything random
+        happens there, it will be the same with the same random seed. It will be ignored for all other parts
+        of the code. Also notice that randomness in that function should be just based on python random."""
         self.raw_database_address = raw_database_address
         self.database_address = database_address
 
         self.prepare_database()
+        if random_seed != -1:
+            random.seed(random_seed)
+
         self.train_folders, self.val_folders, self.test_folders = self.get_train_val_test_folders()
+        if random_seed != -1:
+            random.seed(None)
 
         self.input_shape = self.get_input_shape()
 
     @abstractmethod
-    def get_input_shape(self):
+    def get_input_shape(self) -> Tuple[int, int, int]:
         pass
 
     @abstractmethod
-    def prepare_database(self):
+    def prepare_database(self) -> None:
         pass
 
     @abstractmethod
-    def get_train_val_test_folders(self):
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
+        """Returns train, val and test folders as three lists. Note that the python random seed might have been
+        set here based on the class __init__ function."""
         pass
 
-    def check_number_of_samples_at_each_class_meet_minimum(self, folders, minimum):
-        for folder in folders:
-            if len(os.listdir(folder)) < 2 * minimum:
-                raise Exception(f'There should be at least {2 * minimum} examples in each class. Class {folder} does not have that many examples')
-
-    def _get_instances(self, k):
-        def get_instances(class_dir_address):
-            return tf.data.Dataset.list_files(class_dir_address, shuffle=True).take(2 * k)
-        return get_instances
-
-    def _get_parse_function(self):
+    def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             return example_address
         return parse_function
 
-    def load_dumped_features(self, name):
+    def load_dumped_features(self, name: str) -> Tuple[np.ndarray, np.ndarray]:
         """Returns two numpy matrices. First one is the name of all files which are dumped with the shape of (N, )
         and the second one is the features with the shape of (N, M), where N is the number of files and M is the
         length of the each feature vector. The i-th row in second matrix is the feature vector of i-th element in the
@@ -72,7 +68,7 @@ class Database(ABC):
 
         return all_files, features
 
-    def dump_vgg19_last_hidden_layer(self, partition):
+    def dump_vgg19_last_hidden_layer(self, partition: str) -> None:
         base_model = tf.keras.applications.VGG19(weights='imagenet')
         model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
 
@@ -86,7 +82,15 @@ class Database(ABC):
             # tf.keras.applications.inception_v3.preprocess_input
         )
 
-    def dump_features(self, dataset_partition, name, model, input_shape, feature_size, preprocess_fn):
+    def dump_features(
+            self,
+            dataset_partition: str,
+            name: str,
+            model: tf.keras.models.Model,
+            input_shape: Tuple,
+            feature_size: int,
+            preprocess_fn: Callable
+    ) -> None:
         """Dumps the features of a partition of database: Train, val or test. The features are extracted
         by a model and then dumped into a .npy file. Also the filenames for which the features are dumped will be
         stored in another .npy file. The name of these .npy files are features.npy and files_names.npy and they are
@@ -156,7 +160,7 @@ class Database(ABC):
         print('Features dumped')
         print(f'Time to dump features: {str(end_time - begin_time)}')
 
-    def get_confusion_matrix(self, name, partition='train'):
+    def get_confusion_matrix(self, name: str, partition: str = 'train') -> Tuple[np.ndarray, Dict[str, int]]:
         """Returns the confusion matrix when applying knn on features. The name of dumped features are the input
         to the function. Returns also a mapping of class name to id of the class. The id corresponds with ith row and
         ith column of the confusion matrix"""
@@ -203,359 +207,68 @@ class Database(ABC):
 
         return confusion_matrix, class_ids
 
-    def make_labels_dataset(self, n, k, meta_batch_size, steps_per_epoch, one_hot_labels):
-        labels_dataset = tf.data.Dataset.range(n)
-        if one_hot_labels:
-            labels_dataset = labels_dataset.map(lambda example: tf.one_hot(example, depth=n))
+    def make_labels_dataset(self, n: int, k: int, k_validation: int, one_hot_labels: bool) -> tf.data.Dataset:
+        """Creates a tf.data.Dataset which generates corresponding labels to meta-learning inputs.
+        This method just creates this dataset for one task and repeats it. You can use zip to combine this dataset
+        with your desired dataset.
+        Note that the repeat is set to -1 so that the dataset will repeat itself. This will allow us to
+        zip it with any other dataset and it will generate labels as much as needed.
+        Also notice that this dataset is not batched into meta batch size, so this will just generate labels for one
+        task."""
+        tr_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k), 0))
+        val_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k_validation), 0))
 
-        labels_dataset = labels_dataset.interleave(
-            lambda x: tf.data.Dataset.from_tensors(x).repeat(2 * k),
-            cycle_length=n,
-            block_length=k
-        )
-        labels_dataset = labels_dataset.repeat(meta_batch_size)
-        labels_dataset = labels_dataset.repeat(steps_per_epoch)
+        if one_hot_labels:
+            tr_labels_ds = tr_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
+            val_labels_ds = val_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
+
+        labels_dataset = tf.data.Dataset.zip((tr_labels_ds, val_labels_ds))
+        labels_dataset = labels_dataset.repeat(-1)
+
         return labels_dataset
 
-    def get_folders_with_greater_than_equal_k_files(self, folders, k):
-        to_be_removed = list()
-        for folder in folders:
-            if len(os.listdir(folder)) < k:
-                to_be_removed.append(folder)
+    def get_supervised_meta_learning_dataset(
+            self,
+            folders: List[str],
+            n: int,
+            k: int,
+            k_validation: int,
+            meta_batch_size: int,
+            one_hot_labels: bool = True,
+            reshuffle_each_iteration: bool = True,
+    ) -> tf.data.Dataset:
+        def _get_instances(class_dir_address):
+            def get_instances(class_dir_address):
+                class_dir_address = class_dir_address.numpy().decode('utf-8')
+                instance_names = [
+                    os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
+                ]
+                instances = np.random.choice(instance_names, size=k + k_validation, replace=False)
+                return instances[:k], instances[k:k + k_validation]
 
-        for folder in to_be_removed:
-            folders.remove(folder)
+            return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
 
-        return folders
+        def parse_function(tr_imgs_addresses, val_imgs_addresses):
+            tr_imgs = tf.map_fn(self._get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
+            val_imgs = tf.map_fn(self._get_parse_function(), val_imgs_addresses, dtype=tf.float32)
 
-    def get_dataset_from_tasks_directly(self, tasks, n, k, meta_batch_size, one_hot_labels=True):
-        dataset = tf.data.Dataset.from_tensor_slices(tasks)
-        dataset = dataset.unbatch()
-        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            return tf.stack(tr_imgs), tf.stack(val_imgs)
 
-        steps_per_epoch = len(tasks) // meta_batch_size
-        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+        folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
+        steps_per_epoch = len(folders) // (n * meta_batch_size)
 
-        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = tf.data.Dataset.from_tensor_slices(folders)
+        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(n, drop_remainder=True)
-        dataset = dataset.batch(2, drop_remainder=True)
+
+        labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
-        # for item in dataset:
-        #     print('dataset item')
-        #     print(item)
-        #     exit()
-
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
-
-    def get_sp_meta_learning_dataset_with_confusion(
-        self,
-        folders,
-        n,
-        k,
-        meta_batch_size,
-        features_name='vgg19_last_hidden_layer_train',
-        one_hot_labels=True,
-        reshuffle_each_iteration=True,
-        partition='train'
-    ):
-        sampled_files, features = self.load_dumped_features(features_name)
-
-        feature_dict = {
-            file_name: feature for file_name, feature in zip(sampled_files, features)
-        }
-
-        def get_instances(k):
-            def choose_files_with_sp(files, classes, num):
-                """return a numpy array which is a subset of files and it has to have num elements
-                return should have the following order for each class k examples which are used for task train
-                then for each class k examples which are used for task test.
-                """
-                feature_of_files = np.zeros(shape=(4096, len(files)))
-                files = np.array(files)
-                for i, file in enumerate(files):
-                    feature_of_files[:4096, i] = feature_dict[file]
-                #  # mean squared error
-                #  data_point = feature_of_files[:, 0]
-                #  others = feature_of_files[:, 1:]
-                #  res = np.sum(np.square(others - data_point.reshape((4096, 1))), axis=0)
-                #  closest = np.argmax(res)
-                # SP
-                indices = SSP_with_random_validation_set(feature_of_files, classes, 2)
-                return files[indices]
-
-            def f(class_dir_addresses):
-                def get_files(dir_addresses):
-                    if random.randint(0, 0) == 1:
-                        # print('sp')
-                        files = list()
-                        classes = list()
-                        for i, dir_address in enumerate(dir_addresses):
-                            dir_address = str(dir_address.numpy())[2:-1]
-                            instances = [os.path.join(dir_address, file_name) for file_name in os.listdir(dir_address)]
-                            files.extend(instances)
-                            classes.extend([i] * len(instances))
-
-                        chosen_files = choose_files_with_sp(files, classes, 2 * k)
-                        return chosen_files
-                    else:
-                        # print('random')
-                        chosen_files = list()
-                        for i, dir_address in enumerate(dir_addresses):
-                            dir_address = str(dir_address.numpy())[2:-1]
-                            instances = [os.path.join(dir_address, file_name) for file_name in os.listdir(dir_address)]
-                            selected = np.random.choice(instances, 2, replace=False)
-                            chosen_files.extend(selected)
-
-                        chosen_files = np.array(np.concatenate((chosen_files[::2], chosen_files[1::2])))
-                        return chosen_files
-
-                return tf.py_function(get_files, inp=[class_dir_addresses], Tout=tf.string)
-            return f
-            # return self._get_instances(k)
-
-        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
-
-        cm, class_ids = self.get_confusion_matrix(features_name, partition=partition)
-        sorted_class_names = sorted([class_name for class_name in class_ids], key=lambda x: class_ids[x])
-        sorted_class_names = np.array(sorted_class_names)
-
-        def get_similar_classes(cp):
-            def _get_similar_classes(class_path):
-                class_path = str(class_path.numpy())[2:-3]  # remove b' and /*' from the class_path
-                new_folders = []
-                class_name = class_path[class_path.rindex('/') + 1:]
-                class_index = class_ids[class_name]
-                class_probs = cm[class_ids[class_name], ...]
-
-                class_probs += 1
-                class_probs[class_index] = 0
-                class_probs = class_probs / np.sum(class_probs)
-
-                classes = np.random.choice(sorted_class_names, n - 1, p=class_probs)
-                new_folders.append(class_path)
-
-                for new_class_name in classes:
-                    new_folders.append(class_path.replace(class_name, new_class_name))
-
-                return np.array(new_folders)
-
-            f = tf.py_function(_get_similar_classes, inp=[cp], Tout=[tf.string])
-
-            return f
-
-        def get_random_classes(cp):
-            def _get_random_classes(class_path):
-                class_path = str(class_path.numpy())[2:-3]  # remove b' and /*' from the class_path
-                class_name = class_path[class_path.rindex('/') + 1:]
-                classes = np.random.choice(sorted_class_names, n)
-                new_folders = list()
-
-                for new_class_name in classes:
-                    new_folders.append(class_path.replace(class_name, new_class_name))
-
-                return np.array(new_folders)
-
-            f = tf.py_function(_get_random_classes, inp=[cp], Tout=[tf.string])
-
-            return f
-
-        classes = [class_name + '/*' for class_name in folders]
-        steps_per_epoch = len(classes) // meta_batch_size // n
-
-        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
-
-        dataset = tf.data.Dataset.from_tensor_slices(classes)
-        dataset = dataset.shuffle(buffer_size=len(classes), reshuffle_each_iteration=reshuffle_each_iteration)
-
-        dataset = dataset.map(get_similar_classes)
-        # dataset = dataset.map(get_random_classes)
-        # counter = 0
-        dataset = dataset.map(get_instances(k))
-        # begin = datetime.now()
-        # for item in dataset:
-        #     print(item)
-        #     counter += 1
-        #     if counter == 10:
-        #         end = datetime.now()
-        #         print(str(end - begin))
-        #         exit()
-        # dataset = dataset.interleave(
-        #     get_instances(k),
-        #     cycle_length=n,
-        #     block_length=k,
-        #     num_parallel_calls=tf.data.experimental.AUTOTUNE
-        # )
-        dataset = dataset.unbatch()
-        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-
-        dataset = dataset.batch(k, drop_remainder=False)
-        dataset = dataset.batch(n, drop_remainder=True)
-        dataset = dataset.batch(2, drop_remainder=True)
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        # dataset = dataset.prefetch(4)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-
-        return dataset
-
-
-
-    def get_sp_meta_learning_dataset(
-        self,
-        folders,
-        n,
-        k,
-        meta_batch_size,
-        features_name='vgg19_last_hidden_layer_train',
-        one_hot_labels=True,
-        reshuffle_each_iteration=True,
-
-    ):
-        sampled_files, features = self.load_dumped_features(features_name)
-
-        feature_dict = {
-            file_name: feature for file_name, feature in zip(sampled_files, features)
-        }
-
-        def get_instances(k):
-            def choose_files_with_sp(files, classes, num):
-                """return a numpy array which is a subset of files and it has to have num elements
-                return should have the following order for each class k examples which are used for task train
-                then for each class k examples which are used for task test.
-                """
-                feature_of_files = np.zeros(shape=(4096, len(files)))
-                files = np.array(files)
-                for i, file in enumerate(files):
-                    feature_of_files[:4096, i] = feature_dict[file]
-                #  # mean squared error
-                #  data_point = feature_of_files[:, 0]
-                #  others = feature_of_files[:, 1:]
-                #  res = np.sum(np.square(others - data_point.reshape((4096, 1))), axis=0)
-                #  closest = np.argmax(res)
-                # SP
-                indices = SSP_with_random_validation_set(feature_of_files, classes, num)
-                return files[indices]
-
-            def f(class_dir_addresses):
-                def get_files(dir_addresses):
-                    if random.randint(0, 0) == 0:
-                        # print('sp')
-                        files = list()
-                        classes = list()
-                        for i, dir_address in enumerate(dir_addresses):
-                            dir_address = str(dir_address.numpy())[2:-1]
-                            instances = [os.path.join(dir_address, file_name) for file_name in os.listdir(dir_address)]
-                            files.extend(instances)
-                            classes.extend([i] * len(instances))
-
-                        chosen_files = choose_files_with_sp(files, classes, 2 * k)
-                        return chosen_files
-                    else:
-                        # print('random')
-                        chosen_files = list()
-                        for i, dir_address in enumerate(dir_addresses):
-                            dir_address = str(dir_address.numpy())[2:-1]
-                            instances = [os.path.join(dir_address, file_name) for file_name in os.listdir(dir_address)]
-                            selected = np.random.choice(instances, 2, replace=False)
-                            chosen_files.extend(selected)
-
-                        chosen_files = np.array(np.concatenate((chosen_files[::2], chosen_files[1::2])))
-                        return chosen_files
-
-                return tf.py_function(get_files, inp=[class_dir_addresses], Tout=tf.string)
-            return f
-            # return self._get_instances(k)
-
-        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
-
-        cm, class_ids = self.get_confusion_matrix(features_name)
-        sorted_class_names = sorted([class_name for class_name in class_ids], key=lambda x: class_ids[x])
-        sorted_class_names = np.array(sorted_class_names)
-
-        def get_similar_classes(cp):
-            def _get_similar_classes(class_path):
-                class_path = str(class_path.numpy())[2:-3]  # remove b' and /*' from the class_path
-                new_folders = []
-                class_name = class_path[class_path.rindex('/') + 1:]
-                class_index = class_ids[class_name]
-                class_probs = cm[class_ids[class_name], ...]
-
-                class_probs += 1
-                class_probs[class_index] = 0
-                class_probs = class_probs / np.sum(class_probs)
-
-                classes = np.random.choice(sorted_class_names, n - 1, p=class_probs)
-                new_folders.append(class_path)
-
-                for new_class_name in classes:
-                    new_folders.append(class_path.replace(class_name, new_class_name))
-
-                return np.array(new_folders)
-
-            f = tf.py_function(_get_similar_classes, inp=[cp], Tout=[tf.string])
-
-            return f
-
-        def get_random_classes(cp):
-            def _get_random_classes(class_path):
-                class_path = str(class_path.numpy())[2:-3]  # remove b' and /*' from the class_path
-                class_name = class_path[class_path.rindex('/') + 1:]
-                classes = np.random.choice(sorted_class_names, n)
-                new_folders = list()
-
-                for new_class_name in classes:
-                    new_folders.append(class_path.replace(class_name, new_class_name))
-
-                return np.array(new_folders)
-
-            f = tf.py_function(_get_random_classes, inp=[cp], Tout=[tf.string])
-
-            return f
-
-        classes = [class_name + '/*' for class_name in folders]
-        steps_per_epoch = len(classes) // meta_batch_size // n
-
-        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
-
-        dataset = tf.data.Dataset.from_tensor_slices(classes)
-        # dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
-
-        # dataset = dataset.map(get_similar_classes)
-        dataset = dataset.map(get_random_classes)
-        # counter = 0
-        dataset = dataset.map(get_instances(k))
-        # begin = datetime.now()
-        # for item in dataset:
-        #     print(item)
-        #     counter += 1
-        #     if counter == 10:
-        #         end = datetime.now()
-        #         print(str(end - begin))
-        #         exit()
-        # dataset = dataset.interleave(
-        #     get_instances(k),
-        #     cycle_length=n,
-        #     block_length=k,
-        #     num_parallel_calls=tf.data.experimental.AUTOTUNE
-        # )
-        dataset = dataset.unbatch()
-        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-
-        dataset = dataset.batch(k, drop_remainder=False)
-        dataset = dataset.batch(n, drop_remainder=True)
-        dataset = dataset.batch(2, drop_remainder=True)
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        # dataset = dataset.prefetch(4)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-
         return dataset
 
     def get_meta_learning_dataset_from_clusters(
@@ -567,6 +280,8 @@ class Database(ABC):
             one_hot_labels=True,
             reshuffle_each_iteration=True,
     ):
+        # TODO
+        # Fix this to work with sml
         classes = sorted([os.path.join(clusters_dir, file_address) for file_address in os.listdir(clusters_dir)])
         steps_per_epoch = len(classes) // n // meta_batch_size
         labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
@@ -601,94 +316,6 @@ class Database(ABC):
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
-    def get_supervised_meta_learning_dataset_new_version(
-            self,
-            folders,
-            n,
-            k,
-            k_validation,
-            meta_batch_size,
-            one_hot_labels=True,
-            reshuffle_each_iteration=True,
-    ):
-        def _get_instances(class_dir_address):
-            def get_instances(class_dir_address):
-                class_dir_address = class_dir_address.numpy().decode('utf-8')
-                instance_names = [
-                    os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
-                ]
-
-                return instance_names[:k], instance_names[k:k + k_validation]
-
-            return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
-
-        def parse_function(tr_imgs_addresses, val_imgs_addresses):
-            tr_imgs = tf.map_fn(self._get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
-            val_imgs = tf.map_fn(self._get_parse_function(), val_imgs_addresses, dtype=tf.float32)
-
-            return tf.stack(tr_imgs), tf.stack(val_imgs)
-
-        folders = self.get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
-        steps_per_epoch = len(folders) // (n * meta_batch_size)
-        dataset = tf.data.Dataset.from_tensor_slices(folders)
-        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(n, drop_remainder=True)
-
-        tr_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k), 0))
-        val_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k_validation), 0))
-
-        if one_hot_labels:
-            tr_labels_ds = tr_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
-            val_labels_ds = val_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
-
-        labels_dataset = tf.data.Dataset.zip((tr_labels_ds, val_labels_ds))
-
-        labels_dataset = labels_dataset.repeat(-1)
-
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
-
-    def get_supervised_meta_learning_dataset(
-            self,
-            folders,
-            n,
-            k,
-            meta_batch_size,
-            one_hot_labels=True,
-            reshuffle_each_iteration=True,
-    ):
-        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
-
-        classes = [class_name + '/*' for class_name in folders]
-        steps_per_epoch = len(classes) // n // meta_batch_size
-
-        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
-
-        dataset = tf.data.Dataset.from_tensor_slices(classes)
-        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.interleave(
-            self._get_instances(k),
-            cycle_length=n,
-            block_length=k,
-            num_parallel_calls=tf.data.experimental.AUTOTUNE
-        )
-        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        
-        dataset = dataset.batch(k, drop_remainder=False)
-        dataset = dataset.batch(n, drop_remainder=True)
-        dataset = dataset.batch(2, drop_remainder=True)
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
-
     def get_abstract_learning_dataset(
             self,
             folders,
@@ -697,7 +324,13 @@ class Database(ABC):
             meta_batch_size,
             reshuffle_each_iteration=True
     ):
-        folders = self.get_folders_with_greater_than_equal_k_files(folders, 2 * k)
+        # TODO
+        # Check if we can move it to SML
+        def _get_instances(k):
+            def get_instances(class_dir_address):
+                return tf.data.Dataset.list_files(class_dir_address, shuffle=True).take(2 * k)
+            return get_instances
+        folders = get_folders_with_greater_than_equal_k_files(folders, 2 * k)
         classes = [class_name + '/*' for class_name in folders]
         steps_per_epoch = len(classes) // n // meta_batch_size
 
@@ -714,7 +347,7 @@ class Database(ABC):
         dataset = tf.data.Dataset.from_tensor_slices(classes)
         dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
         dataset = dataset.interleave(
-            self._get_instances(k),
+            _get_instances(k),
             cycle_length=n,
             block_length=k,
             num_parallel_calls=tf.data.experimental.AUTOTUNE
@@ -732,6 +365,8 @@ class Database(ABC):
         return dataset
 
     def get_random_dataset(self, folders, n, meta_batch_size, one_hot_labels=True, reshuffle_each_iteration=True):
+        # TODO
+        # Fix this to work
         instances = list()
         for class_name in folders:
             instances.extend(os.path.join(class_name, file_name) for file_name in os.listdir(class_name))
@@ -748,45 +383,6 @@ class Database(ABC):
         dataset = dataset.batch(2, drop_remainder=True)
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
-
-    def get_umtra_dataset(
-        self,
-        folders,
-        n,
-        meta_batch_size,
-        augmentation_function=None,
-        one_hot_labels=True,
-        reshuffle_each_iteration=True
-    ):
-        if augmentation_function is None:
-            def same(x):
-                return x
-
-            augmentation_function = same
-
-        def parse_umtra(example, label):
-            return tf.stack((example, augmentation_function(example))), tf.stack((label, label))
-
-        instances = list()
-        for class_name in folders:
-            instances.extend(os.path.join(class_name, file_name) for file_name in os.listdir(class_name))
-        instances.sort()
-
-        steps_per_epoch = len(instances) // n // meta_batch_size
-        labels_dataset = self.make_labels_dataset(n, 1, meta_batch_size, steps_per_epoch, one_hot_labels)
-
-        dataset = tf.data.Dataset.from_tensor_slices(instances)
-        dataset = dataset.shuffle(buffer_size=len(instances), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.map(self._get_parse_function())
-
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-
-        dataset = dataset.batch(1, drop_remainder=False)
-        dataset = dataset.batch(n, drop_remainder=True)
-        dataset = dataset.map(parse_umtra)
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
@@ -809,7 +405,7 @@ class OmniglotDatabase(Database):
     def get_input_shape(self):
         return 28, 28, 1
 
-    def get_train_val_test_folders(self):
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         num_train_classes = self.num_train_classes
         num_val_classes = self.num_val_classes
 
@@ -822,7 +418,7 @@ class OmniglotDatabase(Database):
 
         return train_folders, val_folders, test_folders
 
-    def _get_parse_function(self):
+    def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             image = tf.image.resize(image, (28, 28))
@@ -832,7 +428,7 @@ class OmniglotDatabase(Database):
 
         return parse_function
 
-    def prepare_database(self):
+    def prepare_database(self) -> None:
         for item in ('images_background', 'images_evaluation'):
             alphabets = os.listdir(os.path.join(self.raw_database_address, item))
             for alphabet in alphabets:
@@ -848,14 +444,14 @@ class MiniImagenetDatabase(Database):
     def get_input_shape(self):
         return 84, 84, 3
 
-    def __init__(self, random_seed=-1, config=None):
+    def __init__(self):
         super(MiniImagenetDatabase, self).__init__(
             settings.MINI_IMAGENET_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/mini-imagenet'),
-            random_seed=random_seed,
+            random_seed=-1,
         )
 
-    def get_train_val_test_folders(self):
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         dataset_folders = list()
         for dataset_type in ('train', 'val', 'test'):
             dataset_base_address = os.path.join(self.database_address, dataset_type)
@@ -865,7 +461,7 @@ class MiniImagenetDatabase(Database):
             dataset_folders.append(folders)
         return dataset_folders[0], dataset_folders[1], dataset_folders[2]
 
-    def _get_parse_function(self):
+    def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             image = tf.image.resize(image, (84, 84))
@@ -874,7 +470,7 @@ class MiniImagenetDatabase(Database):
             return image / 255.
         return parse_function
 
-    def prepare_database(self):
+    def prepare_database(self) -> None:
         if not os.path.exists(self.database_address):
             shutil.copytree(self.raw_database_address, self.database_address)
 
@@ -883,7 +479,7 @@ class CelebADatabase(Database):
     def get_input_shape(self):
         return 84, 84, 3
 
-    def get_train_val_test_partition(self):
+    def get_train_val_test_partition(self) ->  Tuple[List[str], List[str], List[str]]:
         train_val_test_partition = dict()
         with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'list_eval_partition.txt')) as list_eval_partition:
             for line in list_eval_partition:
@@ -1069,7 +665,7 @@ class CelebADatabase(Database):
             random_seed=random_seed,
         )
 
-    def get_train_val_test_folders(self):
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         dataset_folders = list()
         for dataset_type in ('train', 'val', 'test'):
             dataset_base_address = os.path.join(self.database_address, dataset_type)
@@ -1079,7 +675,7 @@ class CelebADatabase(Database):
             dataset_folders.append(folders)
         return dataset_folders[0], dataset_folders[1], dataset_folders[2]
 
-    def _get_parse_function(self):
+    def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             image = tf.image.resize(image, (84, 84))
