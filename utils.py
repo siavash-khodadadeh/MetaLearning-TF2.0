@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
@@ -16,6 +18,18 @@ def average_gradients(tower_grads, losses):
         average_grads.append(grad)
 
     return average_grads
+
+
+def get_folders_with_greater_than_equal_k_files(folders, k):
+    to_be_removed = list()
+    for folder in folders:
+        if len(os.listdir(folder)) < k:
+            to_be_removed.append(folder)
+
+    for folder in to_be_removed:
+        folders.remove(folder)
+
+    return folders
 
 
 def SP(data, K):

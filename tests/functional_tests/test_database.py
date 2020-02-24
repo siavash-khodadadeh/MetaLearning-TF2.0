@@ -6,51 +6,20 @@ from collections import deque
 
 import tensorflow as tf
 
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase
+from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
 
 
-class TestOmniglotDatabase(unittest.TestCase):
+class TestDatabases(unittest.TestCase):
     def setUp(self):
         def parse_function(example_address):
             return example_address
 
         self.parse_function = parse_function
-        self.configs = [
-            {
-                'num_train_classes': 1200,
-                'num_val_classes': 100,
-                'n': 6,
-                'k': 4,
-                'meta_batch_size': 5
-            },
-            {
-                'num_train_classes': 1200,
-                'num_val_classes': 100,
-                'n': 650,
-                'k': 4,
-                'meta_batch_size': 1
-            },
-            {
-                'num_train_classes': 1200,
-                'num_val_classes': 100,
-                'n': 7,
-                'k': 4,
-                'meta_batch_size': 600
-            },
-            {
-                'num_train_classes': 1200,
-                'num_val_classes': 100,
-                'n': 7,
-                'k': 4,
-                'meta_batch_size': 11
-            },
-            {
-                'num_train_classes': 854,
-                'num_val_classes': 63,
-                'n': 7,
-                'k': 4,
-                'meta_batch_size': 11
-            },
+
+        self.databases = [
+            OmniglotDatabase(random_seed=-1, num_train_classes=1200, num_val_classes=100),
+            MiniImagenetDatabase(random_seed=-1),
+            CelebADatabase(random_seed=-1),
         ]
 
     def get_dataset(
@@ -68,10 +37,11 @@ class TestOmniglotDatabase(unittest.TestCase):
             num_train_classes=num_train_classes,
             num_val_classes=num_val_classes
         )
-        ds = db.get_supervised_meta_learning_dataset(
+        ds = db.get_supervised_meta_learning_dataset_new_version(
             db.train_folders,
             n=n,
             k=k,
+            k_validation=k,
             meta_batch_size=mbs,
             one_hot_labels=one_hot_labels,
             reshuffle_each_iteration=reshuffle_each_iteration
@@ -406,44 +376,3 @@ class TestOmniglotDatabase(unittest.TestCase):
                                     class_names_queue.append(class_name)
                                 else:
                                     self.assertEqual(class_name, class_names_queue.popleft())
-
-    # @patch('tf_datasets.MiniImagenetDatabase._get_parse_function')
-    # def test_sp_meta_learning_dataset(self, mocked_parse_function):
-    #     mocked_parse_function.return_value = self.parse_function
-    #     database = MiniImagenetDatabase(-1)
-    #     dataset = database.get_sp_meta_learning_dataset(
-    #         database.train_folders,
-    #         n=5,
-    #         k=1,
-    #         meta_batch_size=4,
-    #         features_name='vgg19_last_hidden_layer_train'
-    #     )
-    #
-    #     classes = set()
-    #
-    #     for _ in range(2):
-    #         for task_meta_batch, labels_meta_batch in dataset:
-    #             for task_index in range(4):
-    #                 task = task_meta_batch[task_index, ...]
-    #                 task_labels = labels_meta_batch[task_index, ...]
-    #                 train_ds, val_ds = tf.split(task, num_or_size_splits=2)
-    #                 train_labels, val_labels = tf.split(task_labels, num_or_size_splits=2)
-    #                 train_ds = tf.squeeze(train_ds, axis=0)
-    #                 val_ds = tf.squeeze(val_ds, axis=0)
-    #                 train_labels = tf.squeeze(train_labels, axis=0)
-    #                 val_labels = tf.squeeze(val_labels, axis=0)
-    #
-    #                 for class_instances in tf.split(train_ds, num_or_size_splits=5):
-    #                     class_instances = tf.squeeze(class_instances, axis=0)
-    #                     class_instance_address = class_instances[0].numpy().decode('utf-8')
-    #                     class_address = os.path.split(class_instance_address)[0]
-    #                     classes.add(class_address)
-    #                 print(train_ds)
-    #                 print(val_ds)
-    #                 print(train_labels)
-    #                 print(val_labels)
-    #                 break
-    #             break
-    #
-    #     self.assertSetEqual(classes, set(database.train_folders))
-
