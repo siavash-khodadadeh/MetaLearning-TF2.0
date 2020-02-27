@@ -75,4 +75,14 @@ repository for mini-imagenet which uses tensorflow1.14 and is built on top of
 
 ## Citation
 
-Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to publish your research.
+Please cite [this](http://papers.nips.cc/paper/9203-unsupervised-meta-learning-for-few-shot-image-classification) article if you use this code in your work and want to publish your research.
+
+Here is the bibtex information: 
+
+@inproceedings{khodadadeh2019unsupervised,
+  title={Unsupervised Meta-Learning for Few-Shot Image Classification},
+  author={Khodadadeh, Siavash and Boloni, Ladislau and Shah, Mubarak},
+  booktitle={Advances in Neural Information Processing Systems},
+  pages={10132--10142},
+  year={2019}
+}
