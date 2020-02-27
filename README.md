@@ -79,10 +79,10 @@ Please cite [this](http://papers.nips.cc/paper/9203-unsupervised-meta-learning-f
 
 Here is the bibtex information: 
 
-@inproceedings{khodadadeh2019unsupervised,
-  title={Unsupervised Meta-Learning for Few-Shot Image Classification},
-  author={Khodadadeh, Siavash and Boloni, Ladislau and Shah, Mubarak},
-  booktitle={Advances in Neural Information Processing Systems},
-  pages={10132--10142},
-  year={2019}
-}
+@inproceedings{khodadadeh2019unsupervised,  
+&nbsp;&nbsp;&nbsp;&nbsp; title={Unsupervised Meta-Learning for Few-Shot Image Classification},  
+&nbsp;&nbsp;&nbsp;&nbsp; author={Khodadadeh, Siavash and Boloni, Ladislau and Shah, Mubarak},  
+&nbsp;&nbsp;&nbsp;&nbsp; booktitle={Advances in Neural Information Processing Systems},  
+&nbsp;&nbsp;&nbsp;&nbsp; pages={10132--10142},  
+&nbsp;&nbsp;&nbsp;&nbsp; year={2019}  
+}  
