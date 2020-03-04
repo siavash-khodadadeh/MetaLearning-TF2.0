@@ -35,11 +35,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         k_val_ml,
         k_val_val,
         k_val_test,
+        k_test,
         meta_batch_size,
         num_steps_ml,
         lr_inner_ml,
         num_steps_validation,
-        save_after_epochs,
+        save_after_iterations,
         meta_learning_rate,
         report_validation_frequency,
         log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
@@ -53,11 +54,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.k_val_ml = k_val_ml
         self.k_val_val = k_val_val
         self.k_val_test = k_val_test
+        self.k_test = k_test
         self.meta_batch_size = meta_batch_size
         self.num_steps_ml = num_steps_ml
         self.lr_inner_ml = lr_inner_ml
         self.num_steps_validation = num_steps_validation
-        self.save_after_epochs = save_after_epochs
+        self.save_after_iterations = save_after_iterations
         self.log_train_images_after_iteration = log_train_images_after_iteration
         self.report_validation_frequency = report_validation_frequency
         self.least_number_of_tasks_val_test = least_number_of_tasks_val_test
@@ -128,7 +130,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         test_dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.test_folders,
             n=self.n,
-            k=self.k,
+            k=self.k_test,
             k_validation=self.k_val_test,
             meta_batch_size=1,
         )
@@ -255,29 +257,29 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
             return copy_model
 
-    def save_model(self, epochs):
-        self.model.save_weights(os.path.join(self.checkpoint_dir, f'model.ckpt-{epochs}'))
+    def save_model(self, iterations):
+        self.model.save_weights(os.path.join(self.checkpoint_dir, f'model.ckpt-{iterations}'))
 
-    def load_model(self, epochs=None):
-        epoch_count = 0
-        if epochs is not None:
-            checkpoint_path = os.path.join(self.checkpoint_dir, f'model.ckpt-{epochs}')
-            epoch_count = epochs
+    def load_model(self, iterations=None):
+        iteration_count = 0
+        if iterations is not None:
+            checkpoint_path = os.path.join(self.checkpoint_dir, f'model.ckpt-{iterations}')
+            iteration_count = iterations
         else:
             checkpoint_path = tf.train.latest_checkpoint(self.checkpoint_dir)
 
         if checkpoint_path is not None:
             try:
                 self.model.load_weights(checkpoint_path)
-                print('==================\nResuming Training\n==================')
-                epoch_count = int(checkpoint_path[checkpoint_path.rindex('-') + 1:])
+                iteration_count = int(checkpoint_path[checkpoint_path.rindex('-') + 1:])
+                print(f'==================\nResuming Training\n======={iteration_count}=======\n==================')
             except Exception as e:
                 print('Could not load the previous checkpoint!')
 
         else:
             print('No previous checkpoint found!')
 
-        return epoch_count
+        return iteration_count
 
     def get_losses_of_tasks_batch_evaluation(self, iterations):
         @tf.function
@@ -299,9 +301,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return f
 
-    def evaluate(self, iterations, epochs_to_load_from=None):
+    def evaluate(self, iterations, iterations_to_load_from=None):
         self.test_dataset = self.get_test_dataset()
-        self.load_model(epochs=epochs_to_load_from)
+        self.load_model(iterations=iterations_to_load_from)
         test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
         test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
@@ -561,27 +563,24 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 #             var_count += 1
                 #     tf.summary.histogram(f'updated_model_{k}_' + str(var_count), var, step=iteration_count)
 
-    def train(self, epochs=5):
+    def train(self, iterations=5):
         self.train_dataset = self.get_train_dataset()
         self.val_dataset = self.get_val_dataset()
-        start_epoch = self.load_model()
-        iteration_count = start_epoch * self.train_dataset.steps_per_epoch
+        iteration_count = self.load_model()
+        epoch_count = iteration_count // self.train_dataset.steps_per_epoch
 
         pbar = tqdm(self.train_dataset)
 
         self.train_accuracy_metric.reset_states()
         self.train_loss_metric.reset_states()
 
-        for epoch_count in range(start_epoch, epochs):
-            if epoch_count != 0:
-                if epoch_count % self.save_after_epochs == 0:
-                    self.save_model(epoch_count)
-
+        should_continue = iteration_count < iterations
+        while should_continue:
             for (train_ds, val_ds), (train_labels, val_labels) in self.train_dataset:
                 train_acc, train_loss = self.meta_train_loop(train_ds, val_ds, train_labels, val_labels)
                 self.train_accuracy_metric.update_state(train_acc)
                 self.train_loss_metric.update_state(train_loss)
-                # self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+                iteration_count += 1
                 if (
                         self.log_train_images_after_iteration != -1 and
                         iteration_count % self.log_train_images_after_iteration == 0
@@ -594,7 +593,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     )
                     self.log_histograms(step=iteration_count)
 
-                iteration_count += 1
+                if iteration_count != 0 and iteration_count % self.save_after_iterations == 0:
+                    self.save_model(iteration_count)
 
                 if iteration_count % self.report_validation_frequency == 0:
                     self.report_validation_loss_and_accuracy(iteration_count)
@@ -614,6 +614,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     self.train_accuracy_metric.result().numpy()
                 ))
                 pbar.update(1)
+
+                if iteration_count >= iterations:
+                    should_continue = False
+                    break
+
+            epoch_count += 1
 
 
 def run_omniglot():
@@ -653,11 +659,12 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        meta_batch_size=8,
+        k_test=1,
+        meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_epochs=4000,
+        save_after_iterations=5,
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
@@ -666,8 +673,8 @@ def run_mini_imagenet():
         experiment_name='mini_imagenet'
     )
 
-    maml.train(epochs=20001)
-    # maml.evaluate(5)
+    # maml.train(iterations=25)
+    maml.evaluate(50)
 
 
 def run_celeba():

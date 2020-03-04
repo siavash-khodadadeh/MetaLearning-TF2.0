@@ -49,6 +49,7 @@ class Database(ABC):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             return example_address
+
         return parse_function
 
     def load_dumped_features(self, name: str) -> Tuple[np.ndarray, np.ndarray]:
@@ -78,8 +79,7 @@ class Database(ABC):
             model,
             (224, 224),
             4096,
-            None
-            # tf.keras.applications.inception_v3.preprocess_input
+            tf.keras.applications.vgg19.preprocess_input
         )
 
     def dump_features(
@@ -121,7 +121,7 @@ class Database(ABC):
         else:
             raise Exception('Pratition is not train val or test!')
 
-        assert(dataset_partition in ('train', 'val', 'test'))
+        assert (dataset_partition in ('train', 'val', 'test'))
 
         dir_path = os.path.join(self.database_address, f'{name}_{dataset_partition}')
         if not os.path.exists(dir_path):
@@ -276,41 +276,45 @@ class Database(ABC):
             clusters_dir,
             n,
             k,
+            k_val,
             meta_batch_size,
             one_hot_labels=True,
             reshuffle_each_iteration=True,
     ):
-        # TODO
-        # Fix this to work with sml
+        def _get_instances(cluster_id_file_address):
+            cluster_instances = tf.strings.split(tf.io.read_file(cluster_id_file_address), '\n')[:-1]
+
+            def get_instances(ci):
+                instances = np.random.choice(ci, size=k + k_val, replace=False)
+                return instances[:k], instances[k:k + k_val]
+
+            return tf.py_function(get_instances, inp=[cluster_instances], Tout=[tf.string, tf.string])
+
+        def parse_function(tr_imgs_addresses, val_imgs_addresses):
+            tr_imgs = tf.map_fn(self._get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
+            val_imgs = tf.map_fn(self._get_parse_function(), val_imgs_addresses, dtype=tf.float32)
+
+            return tf.stack(tr_imgs), tf.stack(val_imgs)
+
         classes = sorted([os.path.join(clusters_dir, file_address) for file_address in os.listdir(clusters_dir)])
+        final_classes = list()
+
+        for class_name in classes:
+            if len(open(class_name).readlines()) >= k + k_val:
+                final_classes.append(class_name)
+
+        classes = final_classes
         steps_per_epoch = len(classes) // n // meta_batch_size
-        labels_dataset = self.make_labels_dataset(n, k, meta_batch_size, steps_per_epoch, one_hot_labels)
-
-        def _get_instances(k):
-            def get_instances(cluster_id_file_address):
-                cluster_instances = tf.strings.split(tf.io.read_file(cluster_id_file_address), '\n')[:-1]
-                cluster_dataset = tf.data.Dataset.from_tensor_slices(cluster_instances)
-                cluster_dataset = cluster_dataset.shuffle(buffer_size=1000)
-                return cluster_dataset.take(2 * k)
-
-            return get_instances
 
         dataset = tf.data.Dataset.from_tensor_slices(classes)
         dataset = dataset.shuffle(buffer_size=len(classes), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.interleave(
-            _get_instances(k),
-            cycle_length=n,
-            block_length=k,
-            num_parallel_calls=tf.data.experimental.AUTOTUNE
-        )
+        dataset = dataset.map(_get_instances,  num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-
-        dataset = dataset.batch(k, drop_remainder=False)
+        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(n, drop_remainder=True)
-        dataset = dataset.batch(2, drop_remainder=True)
+
+        labels_dataset = self.make_labels_dataset(n, k, k_val, one_hot_labels)
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
@@ -329,12 +333,15 @@ class Database(ABC):
         def _get_instances(k):
             def get_instances(class_dir_address):
                 return tf.data.Dataset.list_files(class_dir_address, shuffle=True).take(2 * k)
+
             return get_instances
+
         folders = get_folders_with_greater_than_equal_k_files(folders, 2 * k)
         classes = [class_name + '/*' for class_name in folders]
         steps_per_epoch = len(classes) // n // meta_batch_size
 
-        labels_dataset = tf.data.Dataset.from_tensor_slices(tf.concat(([1.], tf.zeros((n - 1), dtype=tf.float32)), axis=0))
+        labels_dataset = tf.data.Dataset.from_tensor_slices(
+            tf.concat(([1.], tf.zeros((n - 1), dtype=tf.float32)), axis=0))
 
         labels_dataset = labels_dataset.interleave(
             lambda x: tf.data.Dataset.from_tensors(x).repeat(2 * k),
@@ -389,10 +396,10 @@ class Database(ABC):
 
 class OmniglotDatabase(Database):
     def __init__(
-        self,
-        random_seed,
-        num_train_classes,
-        num_val_classes,
+            self,
+            random_seed,
+            num_train_classes,
+            num_val_classes,
     ):
         self.num_train_classes = num_train_classes
         self.num_val_classes = num_val_classes
@@ -468,6 +475,7 @@ class MiniImagenetDatabase(Database):
             image = tf.cast(image, tf.float32)
 
             return image / 255.
+
         return parse_function
 
     def prepare_database(self) -> None:
@@ -479,7 +487,7 @@ class CelebADatabase(Database):
     def get_input_shape(self):
         return 84, 84, 3
 
-    def get_train_val_test_partition(self) ->  Tuple[List[str], List[str], List[str]]:
+    def get_train_val_test_partition(self) -> Tuple[List[str], List[str], List[str]]:
         train_val_test_partition = dict()
         with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'list_eval_partition.txt')) as list_eval_partition:
             for line in list_eval_partition:
@@ -643,7 +651,7 @@ class CelebADatabase(Database):
         with open(task_file_name, 'w') as task_file:
             for sample in samples:
                 sample_full_address = os.path.join(self.database_address, partition, identities[sample], sample)
-                assert(os.path.exists(sample_full_address))
+                assert (os.path.exists(sample_full_address))
                 task_file.write(
                     sample_full_address
                 )
@@ -682,6 +690,7 @@ class CelebADatabase(Database):
             image = tf.cast(image, tf.float32)
 
             return image / 255.
+
         return parse_function
 
     def put_images_in_train_val_and_test_folders(self):
@@ -723,7 +732,7 @@ class CelebADatabase(Database):
 
 if __name__ == '__main__':
     database = MiniImagenetDatabase()
-    database.dump_vgg19_last_hidden_layer(partition='test')
+    # # database.dump_vgg19_last_hidden_layer(partition='test')
     # ds1 = database.get_supervised_meta_learning_dataset(
     #     database.train_folders,
     #     5,
@@ -752,4 +761,3 @@ if __name__ == '__main__':
     # for i, class_name in enumerate(sorted_class_names):
     #     print(class_name + ',', end='')
     #     print(','.join(map(str, list(cm[i, ...]))))
-

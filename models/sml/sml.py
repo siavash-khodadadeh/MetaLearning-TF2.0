@@ -19,11 +19,15 @@ class SML(ModelAgnosticMetaLearningModel):
             network_cls,
             n,
             k,
+            k_val_ml,
+            k_val_val,
+            k_val_test,
+            k_test,
             meta_batch_size,
             num_steps_ml,
             lr_inner_ml,
             num_steps_validation,
-            save_after_epochs,
+            save_after_iterations,
             meta_learning_rate,
             report_validation_frequency,
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
@@ -41,11 +45,15 @@ class SML(ModelAgnosticMetaLearningModel):
             network_cls=network_cls,
             n=n,
             k=k,
+            k_val_ml=k_val_ml,
+            k_val_val=k_val_val,
+            k_val_test=k_val_test,
+            k_test=k_test,
             meta_batch_size=meta_batch_size,
             num_steps_ml=num_steps_ml,
             lr_inner_ml=lr_inner_ml,
             num_steps_validation=num_steps_validation,
-            save_after_epochs=save_after_epochs,
+            save_after_iterations=save_after_iterations,
             meta_learning_rate=meta_learning_rate,
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
@@ -53,100 +61,95 @@ class SML(ModelAgnosticMetaLearningModel):
             clip_gradients=clip_gradients,
             experiment_name=experiment_name
         )
-        # self.features_model = feature_model
-        # self.n_clusters = n_clusters
-        # self.feature_size = 2 * self.features_model.latent_dim
-        # self.input_shape = input_shape
-        # self.preprocess_fn = preprocess_function
+        self.features_model = feature_model
+        self.n_clusters = n_clusters
+        self.feature_size = feature_size
+        self.input_shape = input_shape
+        self.preprocess_fn = preprocess_function
 
     def get_root(self):
         return os.path.dirname(__file__)
 
-    # def get_features(self, dir_name=None):
-    #     files_names_address = os.path.join(dir_name, 'file_names.npy')
-    #     features_address = os.path.join(dir_name, 'features.npy')
-    #
-    #     if dir_name is not None and os.path.exists(dir_name):
-    #         return np.load(features_address), np.load(files_names_address)
-    #
-    #     all_files = list()
-    #
-    #     for class_name in self.database.train_folders:
-    #         all_files.extend([os.path.join(class_name, file_name) for file_name in os.listdir(class_name)])
-    #
-    #     n = len(all_files)
-    #     m = self.feature_size
-    #     features = np.zeros(shape=(n, m))
-    #
-    #     for index, sampled_file in enumerate(all_files):
-    #         if index % 1000 == 0:
-    #             print(f'{index}/{len(all_files)} images loaded.')
-    #
-    #         img = tf.keras.preprocessing.image.load_img(sampled_file, target_size=self.input_shape)
-    #         img = tf.keras.preprocessing.image.img_to_array(img)
-    #         if self.input_shape[2] == 1:
-    #             img = np.expand_dims(img[:, :, 0], axis=-1)
-    #
-    #         img = np.expand_dims(img, axis=0)
-    #         if self.preprocess_fn is not None:
-    #             img = self.preprocess_fn(img)
-    #
-    #         features[index, :] = self.features_model.predict(img).reshape(-1)
-    #         # features[index, :] = self.features_model.encode(img).reshape(-1)
-    #
-    #     if dir_name is not None:
-    #         os.makedirs(dir_name)
-    #         np.save(files_names_address, all_files)
-    #         np.save(features_address, features)
-    #     return features, all_files
+    def get_features(self, dir_name=None):
+        files_names_address = os.path.join(dir_name, 'file_names.npy')
+        features_address = os.path.join(dir_name, 'features.npy')
 
-    # def get_train_dataset(self):
-    #     clusters_files_dir = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'clusters')
-    #     if not os.path.exists(clusters_files_dir):
-    #         features, all_files = self.get_features(
-    #             dir_name=os.path.join(self.get_root(), f'cache/{self.experiment_name}')
-    #         )
-    #
-    #         k_means_path = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'k_means.pkl')
-    #         if os.path.exists(k_means_path):
-    #             k_means = pickle.load(open(k_means_path, 'rb'))
-    #             cluster_ids = k_means.predict(features)
-    #         else:
-    #             k_means = KMeans(n_clusters=self.n_clusters)
-    #             cluster_ids = k_means.fit_predict(features)
-    #             with open(k_means_path, 'wb') as f:
-    #                 pickle.dump(k_means, f)
-    #
-    #         clusters = dict()
-    #         for i, file_address in enumerate(all_files):
-    #             cluster_index = cluster_ids[i]
-    #             if cluster_index not in clusters.keys():
-    #                 clusters[cluster_index] = list()
-    #
-    #             clusters[cluster_index].append(file_address)
-    #
-    #         # drop clusters with small numbers
-    #         final_clusters = dict()
-    #         counter = 0
-    #         for i in range(self.n_clusters):
-    #             if i in clusters:
-    #                 if len(clusters[i]) >= 2 * self.k:
-    #                     final_clusters[counter] = clusters[i]
-    #                     counter += 1
-    #
-    #         os.makedirs(clusters_files_dir)
-    #         for cluster_id, cluster_instances in final_clusters.items():
-    #             with open(os.path.join(clusters_files_dir, str(cluster_id) + '.txt'), 'w') as cluster_file:
-    #                 for cluster_instance in cluster_instances:
-    #                     cluster_file.write(cluster_instance)
-    #                     cluster_file.write('\n')
-    #
-    #     return self.database.get_meta_learning_dataset_from_clusters(
-    #         clusters_dir=clusters_files_dir,
-    #         n=self.n,
-    #         k=self.k,
-    #         meta_batch_size=self.meta_batch_size
-    #     )
+        if dir_name is not None and os.path.exists(dir_name):
+            return np.load(features_address), np.load(files_names_address)
+
+        all_files = list()
+
+        for class_name in self.database.train_folders:
+            all_files.extend([os.path.join(class_name, file_name) for file_name in os.listdir(class_name)])
+
+        n = len(all_files)
+        m = self.feature_size
+        features = np.zeros(shape=(n, m))
+
+        for index, sampled_file in enumerate(all_files):
+            if index % 1000 == 0:
+                print(f'{index}/{len(all_files)} images loaded.')
+
+            img = tf.keras.preprocessing.image.load_img(sampled_file, target_size=self.input_shape)
+            img = tf.keras.preprocessing.image.img_to_array(img)
+            if self.input_shape[2] == 1:
+                img = np.expand_dims(img[:, :, 0], axis=-1)
+
+            img = np.expand_dims(img, axis=0)
+            if self.preprocess_fn is not None:
+                img = self.preprocess_fn(img)
+
+            features[index, :] = self.features_model.predict(img).reshape(-1)
+            # features[index, :] = self.features_model.encode(img).reshape(-1)
+
+        if dir_name is not None:
+            os.makedirs(dir_name)
+            np.save(files_names_address, all_files)
+            np.save(features_address, features)
+        return features, all_files
+
+    def get_train_dataset(self):
+        clusters_files_dir = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'clusters')
+        if not os.path.exists(clusters_files_dir):
+            features, all_files = self.get_features(
+                dir_name=os.path.join(self.get_root(), f'cache/{self.experiment_name}')
+            )
+
+            k_means_path = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'k_means.pkl')
+            if os.path.exists(k_means_path):
+                k_means = pickle.load(open(k_means_path, 'rb'))
+                cluster_ids = k_means.predict(features)
+            else:
+                k_means = KMeans(n_clusters=self.n_clusters)
+                cluster_ids = k_means.fit_predict(features)
+                with open(k_means_path, 'wb') as f:
+                    pickle.dump(k_means, f)
+
+            clusters = dict()
+            for i, file_address in enumerate(all_files):
+                cluster_index = cluster_ids[i]
+                if cluster_index not in clusters.keys():
+                    clusters[cluster_index] = list()
+
+                clusters[cluster_index].append(file_address)
+
+            os.makedirs(clusters_files_dir)
+            for cluster_id, cluster_instances in clusters.items():
+                with open(os.path.join(clusters_files_dir, str(cluster_id) + '.txt'), 'w') as cluster_file:
+                    for cluster_instance in cluster_instances:
+                        cluster_file.write(cluster_instance)
+                        cluster_file.write('\n')
+
+        tr_dataset = self.database.get_meta_learning_dataset_from_clusters(
+            clusters_dir=clusters_files_dir,
+            n=self.n,
+            k=self.k,
+            k_val=self.k_val_ml,
+            meta_batch_size=self.meta_batch_size
+        )
+        print(tr_dataset.steps_per_epoch)
+        exit()
+        return tr_dataset
 
 
 def sample_data_points(classes_dirs, n_samples):
@@ -265,7 +268,7 @@ def train_the_feature_model_with_classification(fm, dataset, n_classes, input_sh
         # Do this to instantiate all the parameters of the network before loading.
         network.predict(tf.random.uniform(shape=[2, *inputs.shape[1:]]))
         network.load_weights(filepath=file_path)
-        network.evaluate(dataset)
+        # network.evaluate(dataset)
 
     inputs = tf.keras.layers.Input(shape=fm.encoder.input.shape[1:])
     outputs = network.layers[-2](inputs)
@@ -381,6 +384,9 @@ def run_omniglot():
         network_cls=SimpleModel,
         n=5,
         k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
         meta_batch_size=32,
         num_steps_ml=5,
         lr_inner_ml=0.01,
@@ -401,45 +407,54 @@ def run_omniglot():
 
 
 def run_mini_imagenet():
-    mini_imagenet_database = MiniImagenetDatabase(random_seed=-1)
-    n_data_points = 38400
-    data_points, classes, non_labeled_data_points = sample_data_points(
-        mini_imagenet_database.train_folders,
-        n_data_points
-    )
-    features_dataset, n_classes = make_features_dataset_mini_imagenet(data_points, classes, non_labeled_data_points)
-    print(n_classes)
-    feature_model = VariationalAutoEncoderFeature(input_shape=(84, 84, 3), latent_dim=32, n_classes=n_classes)
-    feature_model = train_the_feature_model_with_classification(
-        feature_model,
-        features_dataset,
-        n_classes,
-        mini_imagenet_database.input_shape
-    )
+    mini_imagenet_database = MiniImagenetDatabase()
+    # n_data_points = 38400
+    # data_points, classes, non_labeled_data_points = sample_data_points(
+    #     mini_imagenet_database.train_folders,
+    #     n_data_points
+    # )
+    # features_dataset, n_classes = make_features_dataset_mini_imagenet(data_points, classes, non_labeled_data_points)
+    # print(n_classes)
+    # feature_model = VariationalAutoEncoderFeature(input_shape=(84, 84, 3), latent_dim=32, n_classes=n_classes)
+    # feature_model = train_the_feature_model_with_classification(
+    #     feature_model,
+    #     features_dataset,
+    #     n_classes,
+    #     mini_imagenet_database.input_shape
+    # )
 
     # feature_model = None
+
+    base_model = tf.keras.applications.VGG19(weights='imagenet')
+    feature_model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
 
     sml = SML(
         database=mini_imagenet_database,
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_epochs=400,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
         n_clusters=500,
         feature_model=feature_model,
-        feature_size=288,
-        input_shape=(84, 84, 3),
+        # feature_size=288,
+        feature_size=4096,
+        input_shape=(224, 224, 3),
+        preprocess_function=tf.keras.applications.vgg19.preprocess_input,
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=100,
         report_validation_frequency=250,
-        experiment_name='mini_imagenet_model_maml_baseline'
+        experiment_name='mini_imagenet_imagenet_features'
     )
-    sml.train(epochs=2401)
+    sml.train(iterations=60001)
     # sml.evaluate(iterations=50)
 
 
