@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 
-experiment_name = 'mini_imagenet_model_feature_all_clusters_500'
+experiment_name = 'mini_imagenet_imagenet_features'
 clusters_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'models/sml/cache/', experiment_name, 'clusters')
 
 
