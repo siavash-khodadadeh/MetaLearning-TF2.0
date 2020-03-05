@@ -126,13 +126,14 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         setattr(val_dataset, 'steps_per_epoch', steps_per_epoch)
         return val_dataset
 
-    def get_test_dataset(self):
+    def get_test_dataset(self, seed=-1):
         test_dataset = self.database.get_supervised_meta_learning_dataset(
             self.database.test_folders,
             n=self.n,
             k=self.k_test,
             k_validation=self.k_val_test,
             meta_batch_size=1,
+            seed=seed
         )
         steps_per_epoch = max(test_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
         test_dataset = test_dataset.repeat(-1)
@@ -214,7 +215,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return train_ds, val_ds, train_labels, val_labels
 
     def inner_loss(self, train_labels, logits):
-        loss = tf.reduce_sum(
+        loss = tf.reduce_mean(
             tf.losses.categorical_crossentropy(train_labels, logits, from_logits=True)
         )
         return loss
@@ -282,7 +283,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return iteration_count
 
     def get_losses_of_tasks_batch_evaluation(self, iterations):
-        @tf.function
+        # @tf.function
         def f(inputs):
             train_ds, val_ds, train_labels, val_labels = inputs
             train_ds = combine_first_two_axes(train_ds)
@@ -301,8 +302,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return f
 
-    def evaluate(self, iterations, iterations_to_load_from=None):
-        self.test_dataset = self.get_test_dataset()
+    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1):
+        self.test_dataset = self.get_test_dataset(seed=seed)
         self.load_model(iterations=iterations_to_load_from)
         test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
         test_summary_writer = tf.summary.create_file_writer(test_log_dir)
@@ -334,6 +335,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         print(f'loss std: {np.std(losses)}')
         print(f'accuracy mean: {np.mean(accs)}')
         print(f'accuracy std: {np.std(accs)}')
+        # Free the seed :D
+        if seed != -1:
+            np.random.seed(None)
+
+        print(
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.least_number_of_tasks_val_test)}'
+        )
         return np.mean(accs)
 
     def evaluate_old(self, iterations, epochs_to_load_from=None):
@@ -484,7 +492,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
     #     print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
 
     def outer_loss(self, labels, logits):
-        loss = tf.reduce_sum(
+        loss = tf.reduce_mean(
             tf.losses.categorical_crossentropy(labels, logits, from_logits=True)
         )
         return loss
@@ -659,12 +667,12 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
+        k_test=50,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=5,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
@@ -673,8 +681,8 @@ def run_mini_imagenet():
         experiment_name='mini_imagenet'
     )
 
-    # maml.train(iterations=25)
-    maml.evaluate(50)
+    maml.train(iterations=60000)
+    # maml.evaluate(50, seed=42)
 
 
 def run_celeba():
@@ -691,7 +699,7 @@ def run_celeba():
         save_after_epochs=20,
         meta_learning_rate=0.001,
         report_validation_frequency=1,
-        log_train_images_after_iteration=1000,
+        log_train_images_after_iteration=10,
         least_number_of_tasks_val_test=50,
         clip_gradients=True,
         experiment_name='celeba'
