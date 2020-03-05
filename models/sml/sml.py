@@ -148,7 +148,6 @@ class SML(ModelAgnosticMetaLearningModel):
             meta_batch_size=self.meta_batch_size
         )
         print(tr_dataset.steps_per_epoch)
-        exit()
         return tr_dataset
 
 
@@ -450,12 +449,12 @@ def run_mini_imagenet():
         input_shape=(224, 224, 3),
         preprocess_function=tf.keras.applications.vgg19.preprocess_input,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=100,
+        least_number_of_tasks_val_test=1000,
         report_validation_frequency=250,
         experiment_name='mini_imagenet_imagenet_features'
     )
-    sml.train(iterations=60001)
-    # sml.evaluate(iterations=50)
+    # sml.train(iterations=60001)
+    sml.evaluate(iterations=50, seed=42)
 
 
 def run_celeba():

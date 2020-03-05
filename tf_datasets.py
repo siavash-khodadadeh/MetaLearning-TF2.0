@@ -236,7 +236,10 @@ class Database(ABC):
             meta_batch_size: int,
             one_hot_labels: bool = True,
             reshuffle_each_iteration: bool = True,
+            seed: int = -1,
     ) -> tf.data.Dataset:
+        if seed != -1:
+            np.random.seed(seed)
         def _get_instances(class_dir_address):
             def get_instances(class_dir_address):
                 class_dir_address = class_dir_address.numpy().decode('utf-8')
@@ -258,8 +261,18 @@ class Database(ABC):
         steps_per_epoch = len(folders) // (n * meta_batch_size)
 
         dataset = tf.data.Dataset.from_tensor_slices(folders)
-        dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        if seed != -1:
+            dataset = dataset.shuffle(
+                buffer_size=len(folders),
+                reshuffle_each_iteration=reshuffle_each_iteration,
+                seed=seed
+            )
+            # When using a seed the map should be done in the same order so no parallel execution
+            dataset = dataset.map(_get_instances, num_parallel_calls=1)
+        else:
+            dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
+            dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
         dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(n, drop_remainder=True)
 
