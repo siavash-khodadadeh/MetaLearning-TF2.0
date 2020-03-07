@@ -435,7 +435,7 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
+        k_test=5,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -453,8 +453,8 @@ def run_mini_imagenet():
         report_validation_frequency=250,
         experiment_name='mini_imagenet_imagenet_features'
     )
-    # sml.train(iterations=60001)
-    sml.evaluate(iterations=50, seed=42)
+    # sml.train(iterations=60000)
+    sml.evaluate(iterations=50, seed=14)
 
 
 def run_celeba():

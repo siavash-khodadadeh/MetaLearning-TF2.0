@@ -679,11 +679,11 @@ class CelebADatabase(Database):
 
         return identities
 
-    def __init__(self, random_seed=-1, config=None):
+    def __init__(self, config=None):
         super(CelebADatabase, self).__init__(
             settings.CELEBA_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task'),
-            random_seed=random_seed,
+            random_seed=-1,
         )
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
