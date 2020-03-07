@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
-from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model
 from models.base_model import BaseModel
 from utils import combine_first_two_axes, average_gradients
 import settings
@@ -686,10 +686,10 @@ def run_mini_imagenet():
 
 
 def run_celeba():
-    celeba_database = CelebADatabase()
+    celeba_database = CelebADatabase(input_shape=(224, 224, 3))
     maml = ModelAgnosticMetaLearningModel(
         database=celeba_database,
-        network_cls=MiniImagenetModel,
+        network_cls=VGG19Model,
         n=5,
         k=1,
         k_val_ml=5,
@@ -706,13 +706,14 @@ def run_celeba():
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=100,
         clip_gradients=True,
-        experiment_name='celeba'
+        experiment_name='celeba_vgg'
     )
 
-    maml.train(iterations=120000)
+    maml.train(iterations=60000)
     # maml.evaluate(50, seed=42)
 
 if __name__ == '__main__':
+    tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
     # run_mini_imagenet()
     run_celeba()

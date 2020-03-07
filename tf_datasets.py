@@ -15,7 +15,13 @@ import settings
 
 
 class Database(ABC):
-    def __init__(self, raw_database_address: str, database_address: str, random_seed: int = -1):
+    def __init__(
+            self,
+            raw_database_address: str,
+            database_address: str,
+            random_seed: int = -1,
+            input_shape: Tuple = (84, 84, 3)
+    ):
         """Random seed just sets the random seed for train, val and test folders selection. So if anything random
         happens there, it will be the same with the same random seed. It will be ignored for all other parts
         of the code. Also notice that randomness in that function should be just based on python random."""
@@ -30,11 +36,10 @@ class Database(ABC):
         if random_seed != -1:
             random.seed(None)
 
-        self.input_shape = self.get_input_shape()
+        self.input_shape = input_shape
 
-    @abstractmethod
     def get_input_shape(self) -> Tuple[int, int, int]:
-        pass
+        return self.input_shape
 
     @abstractmethod
     def prepare_database(self) -> None:
@@ -420,10 +425,8 @@ class OmniglotDatabase(Database):
             settings.OMNIGLOT_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/omniglot'),
             random_seed=random_seed,
+            input_shape=(28, 28, 1)
         )
-
-    def get_input_shape(self):
-        return 28, 28, 1
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         num_train_classes = self.num_train_classes
@@ -461,14 +464,12 @@ class OmniglotDatabase(Database):
 
 
 class MiniImagenetDatabase(Database):
-    def get_input_shape(self):
-        return 84, 84, 3
-
     def __init__(self):
         super(MiniImagenetDatabase, self).__init__(
             settings.MINI_IMAGENET_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/mini-imagenet'),
             random_seed=-1,
+            input_shape=(84, 84, 3)
         )
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
@@ -497,9 +498,6 @@ class MiniImagenetDatabase(Database):
 
 
 class CelebADatabase(Database):
-    def get_input_shape(self):
-        return 84, 84, 3
-
     def get_train_val_test_partition(self) -> Tuple[List[str], List[str], List[str]]:
         train_val_test_partition = dict()
         with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'list_eval_partition.txt')) as list_eval_partition:
@@ -679,12 +677,14 @@ class CelebADatabase(Database):
 
         return identities
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, input_shape=(84, 84, 3)):
         super(CelebADatabase, self).__init__(
             settings.CELEBA_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task'),
             random_seed=-1,
+            input_shape=input_shape
         )
+
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         dataset_folders = list()
@@ -699,7 +699,7 @@ class CelebADatabase(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
-            image = tf.image.resize(image, (84, 84))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
 
             return image / 255.
