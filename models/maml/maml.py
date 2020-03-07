@@ -283,7 +283,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return iteration_count
 
     def get_losses_of_tasks_batch_evaluation(self, iterations):
-        # @tf.function
+        @tf.function
         def f(inputs):
             train_ds, val_ds, train_labels, val_labels = inputs
             train_ds = combine_first_two_axes(train_ds)
@@ -676,39 +676,43 @@ def run_mini_imagenet():
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=100,
+        least_number_of_tasks_val_test=1000,
         clip_gradients=True,
         experiment_name='mini_imagenet'
     )
 
-    maml.train(iterations=60000)
-    # maml.evaluate(50, seed=42)
+    # maml.train(iterations=60000)
+    maml.evaluate(50, seed=14)
 
 
 def run_celeba():
-    celeba_database = CelebADatabase(random_seed=-1)
+    celeba_database = CelebADatabase()
     maml = ModelAgnosticMetaLearningModel(
         database=celeba_database,
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
-        lr_inner_ml=0.01,
+        lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_epochs=20,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
-        report_validation_frequency=1,
-        log_train_images_after_iteration=10,
-        least_number_of_tasks_val_test=50,
+        report_validation_frequency=250,
+        log_train_images_after_iteration=1000,
+        least_number_of_tasks_val_test=100,
         clip_gradients=True,
         experiment_name='celeba'
     )
 
-    # maml.train(epochs=100)
-    maml.evaluate(5)
+    maml.train(iterations=120000)
+    # maml.evaluate(50, seed=42)
 
 if __name__ == '__main__':
     # run_omniglot()
-    run_mini_imagenet()
-    # run_celeba()
+    # run_mini_imagenet()
+    run_celeba()
