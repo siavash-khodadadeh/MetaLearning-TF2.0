@@ -77,3 +77,69 @@ class MiniImagenetModel(tf.keras.Model):
         out = self.dense(f)
 
         return out
+
+
+class VGG19Model(tf.keras.models.Model):
+    name = 'VGG19Model'
+
+    def __init__(self, num_classes):
+        super(VGG19Model, self).__init__(name='vgg19_model')
+        self.block1_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation='relu',  padding='same', name='block1_conv1')
+        self.block1_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2')
+        self.block1_pool = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')
+
+        self.block2_conv1 = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1')
+        self.block2_conv2 = tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2')
+        self.block2_pool = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')
+
+        self.block3_conv1 = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1')
+        self.block3_conv2 = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2')
+        self.block3_conv3 = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3')
+        self.block3_conv4 = tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv4')
+        self.block3_pool = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')
+
+        self.block4_conv1 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1')
+        self.block4_conv2 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2')
+        self.block4_conv3 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3')
+        self.block4_conv4 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv4')
+        self.block4_pool = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')
+
+        self.block5_conv1 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1')
+        self.block5_conv2 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2')
+        self.block5_conv3 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3')
+        self.block5_conv4 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv4')
+        self.block5_pool = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')
+
+        self.flatten = tf.keras.layers.Flatten(name='flatten')
+        self.fc1 = tf.keras.layers.Dense(4096, activation='relu', name='fc1')
+        self.fc2 = tf.keras.layers.Dense(4096, activation='relu', name='fc2')
+        self.fc3 = tf.keras.layers.Dense(num_classes, activation='softmax', name='predictions')
+
+    def call(self, inputs, training=False):
+        image = inputs
+        output = self.block1_conv1(image)
+        output = self.block1_conv2(output)
+        output = self.block1_pool(output)
+        output = self.block2_conv1(output)
+        output = self.block2_conv2(output)
+        output = self.block2_pool(output)
+        output = self.block3_conv1(output)
+        output = self.block3_conv2(output)
+        output = self.block3_conv3(output)
+        output = self.block3_conv4(output)
+        output = self.block3_pool(output)
+        output = self.block4_conv1(output)
+        output = self.block4_conv2(output)
+        output = self.block4_conv3(output)
+        output = self.block4_conv4(output)
+        output = self.block4_pool(output)
+        output = self.block5_conv1(output)
+        output = self.block5_conv2(output)
+        output = self.block5_conv3(output)
+        output = self.block5_conv4(output)
+        output = self.block5_pool(output)
+        output = self.flatten(output)
+        output = self.fc1(output)
+        output = self.fc2(output)
+        output = self.fc3(output)
+        return output
