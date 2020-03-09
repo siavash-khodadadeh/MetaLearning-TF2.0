@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
-from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model, VGGSmallModel
 from models.base_model import BaseModel
 from utils import combine_first_two_axes, average_gradients
 import settings
@@ -290,6 +290,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             val_ds = combine_first_two_axes(val_ds)
 
             updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
+            # For comparison with MAML paper set the training=True
             updated_model_logits = updated_model(val_ds, training=True)
             val_loss = self.outer_loss(val_labels, updated_model_logits)
 
@@ -687,9 +688,11 @@ def run_mini_imagenet():
 
 def run_celeba():
     celeba_database = CelebADatabase(input_shape=(224, 224, 3))
+    # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     maml = ModelAgnosticMetaLearningModel(
         database=celeba_database,
-        network_cls=VGG19Model,
+        network_cls=VGGSmallModel,
+        # network_cls=MiniImagenetModel,
         n=5,
         k=1,
         k_val_ml=5,
@@ -706,14 +709,15 @@ def run_celeba():
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=100,
         clip_gradients=True,
-        experiment_name='celeba_vgg'
+        experiment_name='celeba_with_momentum'
     )
 
     maml.train(iterations=60000)
-    # maml.evaluate(50, seed=42)
+    maml.evaluate(50, seed=42)
+
 
 if __name__ == '__main__':
-    tf.config.set_visible_devices([], 'GPU')
+    # tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
     # run_mini_imagenet()
     run_celeba()
