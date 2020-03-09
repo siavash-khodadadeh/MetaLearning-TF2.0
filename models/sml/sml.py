@@ -121,6 +121,7 @@ class SML(ModelAgnosticMetaLearningModel):
                 cluster_ids = k_means.predict(features)
             else:
                 k_means = KMeans(n_clusters=self.n_clusters)
+                # k_means = KMeans(n_clusters=self.n_clusters, n_init=1, max_iter=3000)
                 cluster_ids = k_means.fit_predict(features)
                 with open(k_means_path, 'wb') as f:
                     pickle.dump(k_means, f)
@@ -458,29 +459,42 @@ def run_mini_imagenet():
 
 
 def run_celeba():
-    celeba_dataset = CelebADatabase(random_seed=-1)
+    celeba_database = CelebADatabase()
+    base_model = tf.keras.applications.VGG19(weights='imagenet')
+    feature_model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
+
     sml = SML(
-        database=celeba_dataset,
+        database=celeba_database,
         network_cls=MiniImagenetModel,
-        n=2,
-        meta_batch_size=8,
+        n=5,
+        k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
+        k_test=1,
+        meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_epochs=5,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
-        log_train_images_after_iteration=10,
-        least_number_of_tasks_val_test=50,
-        report_validation_frequency=100,
-        experiment_name='euclidean'
+        n_clusters=500,
+        feature_model=feature_model,
+        # feature_size=288,
+        feature_size=4096,
+        input_shape=(224, 224, 3),
+        preprocess_function=tf.keras.applications.vgg19.preprocess_input,
+        log_train_images_after_iteration=1000,
+        least_number_of_tasks_val_test=1000,
+        report_validation_frequency=250,
+        experiment_name='celeba_imagenet_features'
     )
-
-    sml.train(epochs=21)
-    sml.evaluate(iterations=50)
+    # sml.train(iterations=60000)
+    sml.evaluate(iterations=50, seed=42)
 
 
 if __name__ == '__main__':
     # run_omniglot()
-    run_mini_imagenet()
-    # run_celeba()
+    # run_mini_imagenet()
+    run_celeba()
 
