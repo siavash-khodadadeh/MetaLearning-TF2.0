@@ -685,7 +685,6 @@ class CelebADatabase(Database):
             input_shape=input_shape
         )
 
-
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         dataset_folders = list()
         for dataset_type in ('train', 'val', 'test'):
@@ -742,6 +741,36 @@ class CelebADatabase(Database):
             os.makedirs(self.database_address)
             self.put_images_in_train_val_and_test_folders()
 
+class LFWDatabase(Database):
+    def __init__(self, config=None, input_shape=(84, 84, 3)):
+        super(LFWDatabase, self).__init__(
+            settings.LFW_RAW_DATA_ADDRESS,
+            os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/lfw/'),
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def prepare_database(self) -> None:
+        if not os.path.exists(self.database_address):
+            shutil.copytree(self.raw_database_address, self.database_address)
+
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
+        # TODO fix this
+        dataset_folders = [
+            os.path.join(self.database_address, class_name) for class_name in os.listdir(self.database_address)
+        ]
+
+        return dataset_folders, dataset_folders, dataset_folders
+
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse_function
 
 if __name__ == '__main__':
     database = MiniImagenetDatabase()
