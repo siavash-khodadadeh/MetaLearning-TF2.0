@@ -741,6 +741,7 @@ class CelebADatabase(Database):
             os.makedirs(self.database_address)
             self.put_images_in_train_val_and_test_folders()
 
+
 class LFWDatabase(Database):
     def __init__(self, config=None, input_shape=(84, 84, 3)):
         super(LFWDatabase, self).__init__(
@@ -771,6 +772,48 @@ class LFWDatabase(Database):
             return image / 255.
 
         return parse_function
+
+
+class VGGFace2Database(Database):
+    def __init__(self, config=None, input_shape=(84, 84, 3)):
+        super(VGGFace2Database, self).__init__(
+            settings.VGG_FACE2,
+            settings.VGG_FACE2,
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def prepare_database(self) -> None:
+        pass
+
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
+        # TODO fix this
+        train_address = os.path.join(self.database_address, 'train')
+        dataset_folders = [
+            os.path.join(train_address, class_name) for class_name in os.listdir(train_address)
+        ]
+
+        celeba_val_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task/val/')
+        val_folders = [
+            os.path.join(celeba_val_address, class_name) for class_name in os.listdir(celeba_val_address)
+        ]
+
+        celeba_test_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task/test/')
+        test_folders = [
+            os.path.join(celeba_test_address, class_name) for class_name in os.listdir(celeba_test_address)
+        ]
+        return dataset_folders, val_folders, test_folders
+
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse_function
+
 
 if __name__ == '__main__':
     database = MiniImagenetDatabase()

@@ -177,7 +177,7 @@ def sample_data_points(classes_dirs, n_samples):
     return instances[selected_indices], labels[selected_indices], None
 
 
-def make_features_dataset_mini_imagenet(data, labels, non_labeled_data):
+def make_features_dataset_mini_imagenet(data, labels, non_labeled_data, shuffle_buffer_size=None, batch_size=32):
     # non_labeled_data = np.concatenate((data, non_labeled_data))
     label_values = np.unique(labels)
     depth = len(label_values)
@@ -189,7 +189,7 @@ def make_features_dataset_mini_imagenet(data, labels, non_labeled_data):
 
     def _parse_image(image_file):
         image = tf.image.decode_jpeg(tf.io.read_file(image_file))
-        image = tf.image.resize(image, (84, 84))
+        image = tf.image.resize(image, (224, 224))
         image = tf.cast(image, tf.float32)
         return image / 255.
 
@@ -205,8 +205,8 @@ def make_features_dataset_mini_imagenet(data, labels, non_labeled_data):
     # non_labeled_dataset = non_labeled_dataset.map(_parse_image)
 
     # dataset = tf.data.Dataset.zip((dataset, non_labeled_dataset))
-    dataset = dataset.shuffle(buffer_size=len(data))
-    dataset = dataset.batch(32, drop_remainder=False)
+    dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
+    dataset = dataset.batch(batch_size, drop_remainder=False)
 
     # dataset = dataset.cache()
 
@@ -408,12 +408,38 @@ def run_omniglot():
 
 def run_mini_imagenet():
     mini_imagenet_database = MiniImagenetDatabase()
-    # n_data_points = 38400
-    # data_points, classes, non_labeled_data_points = sample_data_points(
-    #     mini_imagenet_database.train_folders,
-    #     n_data_points
-    # )
-    # features_dataset, n_classes = make_features_dataset_mini_imagenet(data_points, classes, non_labeled_data_points)
+    n_data_points = 38400
+    data_points, classes, non_labeled_data_points = sample_data_points(
+        mini_imagenet_database.train_folders,
+        n_data_points
+    )
+    features_dataset, n_classes = make_features_dataset_mini_imagenet(
+        data_points,
+        classes,
+        non_labeled_data_points,
+        # shuffle_buffer_size=n_data_points,
+        # batch_size=32,
+        batch_size=16,
+        shuffle_buffer_size=1000,
+    )
+    feature_model = tf.keras.applications.VGG19(weights=None, classes=n_classes)
+    feature_model.compile(
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        metrics=['accuracy'],
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-6),
+    )
+
+    def save_call_back(epoch, logs):
+        if epoch % 100 == 0:
+            feature_model.save_weights(filepath=f'./feature_models/feature_model_{epoch}')
+
+    # saver_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=save_call_back)
+    # feature_model.fit(features_dataset, epochs=101, callbacks=[saver_callback])
+    feature_model.load_weights(filepath=f'./feature_models/feature_model_100')
+    feature_model.evaluate(features_dataset)
+    exit()
+    feature_model = tf.keras.models.Model(inputs=feature_model.input, outputs=feature_model.layers[24].output)
+
     # print(n_classes)
     # feature_model = VariationalAutoEncoderFeature(input_shape=(84, 84, 3), latent_dim=32, n_classes=n_classes)
     # feature_model = train_the_feature_model_with_classification(
@@ -425,8 +451,9 @@ def run_mini_imagenet():
 
     # feature_model = None
 
-    base_model = tf.keras.applications.VGG19(weights='imagenet')
-    feature_model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
+    # use imagenet
+    # base_model = tf.keras.applications.VGG19(weights='imagenet')
+    # feature_model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
 
     sml = SML(
         database=mini_imagenet_database,
@@ -452,7 +479,7 @@ def run_mini_imagenet():
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=1000,
         report_validation_frequency=250,
-        experiment_name='mini_imagenet_imagenet_features'
+        experiment_name='mini_imagenet_learn_miniimagent_features'
     )
     # sml.train(iterations=60000)
     sml.evaluate(iterations=50, seed=14)
@@ -495,6 +522,6 @@ def run_celeba():
 
 if __name__ == '__main__':
     # run_omniglot()
-    # run_mini_imagenet()
-    run_celeba()
+    run_mini_imagenet()
+    # run_celeba()
 
