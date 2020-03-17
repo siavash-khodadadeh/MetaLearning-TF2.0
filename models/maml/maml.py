@@ -4,7 +4,7 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase
+from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, VGGFace2Database
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model, VGGSmallModel
 from models.base_model import BaseModel
 from utils import combine_first_two_axes, average_gradients
@@ -434,12 +434,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         loss_func = self.get_losses_of_tasks_batch_evaluation(self.num_steps_validation)
         for (train_ds, val_ds), (train_labels, val_labels) in self.val_dataset:
             val_counter += 1
-            if val_counter % 5 == 0:
-                step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
-                # pick the first task in meta batch
-                log_train_ds = combine_first_two_axes(train_ds[0, ...])
-                log_val_ds = combine_first_two_axes(val_ds[0, ...])
-                self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
+            # TODO fix validation logging
+            # if val_counter % 5 == 0:
+            #     step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
+            #     # pick the first task in meta batch
+            #     log_train_ds = combine_first_two_axes(train_ds[0, ...])
+            #     log_val_ds = combine_first_two_axes(val_ds[0, ...])
+            #     self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
 
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
                 loss_func,
@@ -687,8 +688,9 @@ def run_mini_imagenet():
 
 
 def run_celeba():
+    celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
-    celeba_database = LFWDatabase(input_shape=(224, 224, 3))
+    #celeba_database = LFWDatabase(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     maml = ModelAgnosticMetaLearningModel(
         database=celeba_database,
@@ -701,20 +703,20 @@ def run_celeba():
         k_val_test=15,
         k_test=1,
         meta_batch_size=4,
-        num_steps_ml=5,
+        num_steps_ml=1,
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_iterations=15000,
-        meta_learning_rate=0.001,
+        meta_learning_rate=0.0001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=100,
         clip_gradients=True,
-        experiment_name='celeba'
+        experiment_name='vgg_face2_conv128'
     )
 
-    # maml.train(iterations=60000)
-    maml.evaluate(50, seed=42)
+    maml.train(iterations=60000)
+    # maml.evaluate(50, seed=42)
 
 
 if __name__ == '__main__':

@@ -85,20 +85,22 @@ class VGGSmallModel(tf.keras.models.Model):
     def __init__(self, num_classes):
         super(VGGSmallModel, self).__init__(name='vgg_small_model')
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
-        self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
+        self.conv1 = tf.keras.layers.Conv2D(64, 3, name='conv1')
         self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
-        self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
+        self.conv2 = tf.keras.layers.Conv2D(128, 3, name='conv2')
         self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
-        self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
+        self.conv3 = tf.keras.layers.Conv2D(256, 3, name='conv3')
         self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
-        self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
+        self.conv4 = tf.keras.layers.Conv2D(256, 3, name='conv4')
         self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
-        self.conv5 = tf.keras.layers.Conv2D(32, 3, name='conv5')
+        self.conv5 = tf.keras.layers.Conv2D(512, 3, name='conv5')
         self.bn5 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn5')
-        self.conv6 = tf.keras.layers.Conv2D(32, 3, name='conv6')
+        self.conv6 = tf.keras.layers.Conv2D(512, 3, name='conv6')
         self.bn6 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn6')
         self.flatten = Flatten(name='flatten')
 
+        self.dense1 = tf.keras.layers.Dense(32, activation=None, name='dense1')
+        self.bn_dense = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn_dense')
         self.dense = Dense(num_classes, activation=None, name='dense')
 
     def conv_block(self, features, conv, bn=None, training=False):
@@ -116,6 +118,9 @@ class VGGSmallModel(tf.keras.models.Model):
         output = self.conv_block(output, self.conv5, self.bn5, training=training)
         output = self.conv_block(output, self.conv6, self.bn6, training=training)
         output = self.flatten(output)
+        output = self.dense1(output)
+        output = self.bn_dense(output)
+        output = tf.keras.activations.relu(output)
         output = self.dense(output)
         return output
 
