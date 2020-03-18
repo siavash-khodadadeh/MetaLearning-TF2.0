@@ -706,13 +706,13 @@ def run_celeba():
         num_steps_ml=1,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=15000,
+        save_after_iterations=5000,
         meta_learning_rate=0.0001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         least_number_of_tasks_val_test=100,
         clip_gradients=True,
-        experiment_name='vgg_face2_conv128'
+        experiment_name='vgg_face2_conv128_mlr_0.0001'
     )
 
     maml.train(iterations=60000)
