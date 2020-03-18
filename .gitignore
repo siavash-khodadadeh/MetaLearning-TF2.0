@@ -3,3 +3,4 @@
 data/*
 logs/*
 saved_models/*
+local_settings.py

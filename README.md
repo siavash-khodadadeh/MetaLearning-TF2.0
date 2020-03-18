@@ -90,3 +90,7 @@ Then set the value of CELEBA_RAW_DATA_ADDRESS variable in settings.py to the add
 ## Citation
 
 Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to publish your research.
+
+
+### LFW
+http://vis-www.cs.umass.edu/lfw/lfw-deepfunneled.tgz
