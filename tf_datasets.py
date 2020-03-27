@@ -464,12 +464,12 @@ class OmniglotDatabase(Database):
 
 
 class MiniImagenetDatabase(Database):
-    def __init__(self):
+    def __init__(self, input_shape=(84, 84, 3)):
         super(MiniImagenetDatabase, self).__init__(
             settings.MINI_IMAGENET_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/mini-imagenet'),
             random_seed=-1,
-            input_shape=(84, 84, 3)
+            input_shape=input_shape
         )
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
@@ -485,7 +485,7 @@ class MiniImagenetDatabase(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
-            image = tf.image.resize(image, (84, 84))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
 
             return image / 255.

@@ -8,3 +8,4 @@ miniimagenettools
 matplotlib
 seaborn
 pandas
+
