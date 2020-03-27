@@ -436,8 +436,8 @@ def run_mini_imagenet():
     # saver_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=save_call_back)
     # feature_model.fit(features_dataset, epochs=101, callbacks=[saver_callback])
     feature_model.load_weights(filepath=f'./feature_models/feature_model_100')
-    feature_model.evaluate(features_dataset)
-    exit()
+    # feature_model.evaluate(features_dataset)
+    # exit()
     feature_model = tf.keras.models.Model(inputs=feature_model.input, outputs=feature_model.layers[24].output)
 
     # print(n_classes)
@@ -463,7 +463,7 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=5,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -477,12 +477,12 @@ def run_mini_imagenet():
         input_shape=(224, 224, 3),
         preprocess_function=tf.keras.applications.vgg19.preprocess_input,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=1000,
+        least_number_of_tasks_val_test=100,
         report_validation_frequency=250,
         experiment_name='mini_imagenet_learn_miniimagent_features'
     )
-    # sml.train(iterations=60000)
-    sml.evaluate(iterations=50, seed=14)
+    sml.train(iterations=60000)
+    # sml.evaluate(iterations=50, seed=14)
 
 
 def run_celeba():
