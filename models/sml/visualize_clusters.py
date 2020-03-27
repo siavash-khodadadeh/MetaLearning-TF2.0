@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 
+# experiment_name = 'mini_imagenet_learn_miniimagent_features'
 experiment_name = 'mini_imagenet_imagenet_features'
 clusters_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'models/sml/cache/', experiment_name, 'clusters')
 
@@ -27,7 +28,10 @@ for cluster_file in sorted([os.path.join(clusters_address, f) for f in os.listdi
             index = row * ncols + col
             if index == num_lines:
                 break
-            line = lines[index][:-1]
+            try:
+                line = lines[index][:-1]
+            except:
+                break
             class_name = line[:line.rindex('/')]
             class_name = class_name[class_name.rindex('/') + 1:]
             img = Image.open(line)

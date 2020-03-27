@@ -688,9 +688,9 @@ def run_mini_imagenet():
 
 
 def run_celeba():
-    celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
-    # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
-    #celeba_database = LFWDatabase(input_shape=(224, 224, 3))
+    # celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
+    celeba_database = CelebADatabase(input_shape=(224, 224, 3))
+    # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     maml = ModelAgnosticMetaLearningModel(
         database=celeba_database,
@@ -701,22 +701,25 @@ def run_celeba():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
+        k_test=5,
         meta_batch_size=4,
         num_steps_ml=1,
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_iterations=5000,
-        meta_learning_rate=0.0001,
+        meta_learning_rate=0.000005,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=100,
+        least_number_of_tasks_val_test=1000,
         clip_gradients=True,
         experiment_name='vgg_face2_conv128_mlr_0.0001'
     )
 
-    maml.train(iterations=60000)
-    # maml.evaluate(50, seed=42)
+    # 260000 iteration with meta learning rate 0.0001
+    # from there start with 0.00001
+    # from 310000 start with 0.000005
+    # maml.train(iterations=360000)
+    maml.evaluate(50, seed=42)
 
 
 if __name__ == '__main__':
