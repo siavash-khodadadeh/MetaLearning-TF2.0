@@ -94,3 +94,25 @@ Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this cod
 
 ### LFW
 http://vis-www.cs.umass.edu/lfw/lfw-deepfunneled.tgz
+
+### ISIC
+Home: http://challenge2018.isic-archive.com
+
+Direct (must login): https://challenge.kitware.com/#phase/5abcbc6f56357d0139260e66
+
+Go to direct link and download training dataset and download ground truth data
+put both zip files in the same folder and unzip them.
+
+There should be two folders in the new folder you created
+
+ISIC2018_Task3_Training_GroundTruth
+
+ISIC2018_Task3_Training_Input
+
+Set the variable ISIC_RAW_DATASET_ADDRESS in local_settings.py for yourself.
+
+
+### ChestX-Ray8
+
+Download the data.zip and put it in a folder (for example names ChestX-Ray8) and unzip 
+it after copying it in that folder. Then set the variable for RAW_DATASET_ADDRESS

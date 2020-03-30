@@ -9,8 +9,10 @@ from typing import Tuple, List, Callable, Dict
 import tensorflow as tf
 import numpy as np
 import tqdm
+import pandas as pd
 
-from utils import SSP, SSP_with_random_validation_set, get_folders_with_greater_than_equal_k_files
+from utils import SSP, SSP_with_random_validation_set, get_folders_with_greater_than_equal_k_files, \
+    keep_keys_with_greater_than_equal_k_items
 import settings
 
 
@@ -28,7 +30,6 @@ class Database(ABC):
         self.raw_database_address = raw_database_address
         self.database_address = database_address
 
-        self.prepare_database()
         if random_seed != -1:
             random.seed(random_seed)
 
@@ -42,12 +43,9 @@ class Database(ABC):
         return self.input_shape
 
     @abstractmethod
-    def prepare_database(self) -> None:
-        pass
-
-    @abstractmethod
-    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
-        """Returns train, val and test folders as three lists. Note that the python random seed might have been
+    def get_train_val_test_folders(self) -> Tuple:
+        """Returns train, val and test folders as three lists or three dictionaries.
+        Note that the python random seed might have been
         set here based on the class __init__ function."""
         pass
 
@@ -243,14 +241,26 @@ class Database(ABC):
             reshuffle_each_iteration: bool = True,
             seed: int = -1,
     ) -> tf.data.Dataset:
+        """Folders can be a dictionary and also real name of folders.
+        If it is a dictionary then each item is the class name and the corresponding values are the file addressses
+        of images of that class."""
         if seed != -1:
             np.random.seed(seed)
+
+        if type(folders) == list:
+            classes = dict()
+            for folder in folders:
+                instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
+                classes[folder] = instances
+            folders = classes
+
         def _get_instances(class_dir_address):
             def get_instances(class_dir_address):
                 class_dir_address = class_dir_address.numpy().decode('utf-8')
-                instance_names = [
-                    os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
-                ]
+                instance_names = folders[class_dir_address]
+                # instance_names = [
+                #     os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
+                # ]
                 instances = np.random.choice(instance_names, size=k + k_validation, replace=False)
                 return instances[:k], instances[k:k + k_validation]
 
@@ -262,13 +272,14 @@ class Database(ABC):
 
             return tf.stack(tr_imgs), tf.stack(val_imgs)
 
-        folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
-        steps_per_epoch = len(folders) // (n * meta_batch_size)
+        keep_keys_with_greater_than_equal_k_items(folders, k + k_validation)
+        # folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
+        steps_per_epoch = len(folders.keys()) // (n * meta_batch_size)
 
-        dataset = tf.data.Dataset.from_tensor_slices(folders)
+        dataset = tf.data.Dataset.from_tensor_slices(list(folders.keys()))
         if seed != -1:
             dataset = dataset.shuffle(
-                buffer_size=len(folders),
+                buffer_size=len(folders.keys()),
                 reshuffle_each_iteration=reshuffle_each_iteration,
                 seed=seed
             )
@@ -428,18 +439,31 @@ class OmniglotDatabase(Database):
             input_shape=(28, 28, 1)
         )
 
-    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
+    def get_train_val_test_folders(self) -> Tuple:
+        alphabets = list()
+        for item in ('images_background', 'images_evaluation'):
+            base_address = os.path.join(self.raw_database_address, item)
+            alphabets.extend([os.path.join(base_address, alphabet) for alphabet in os.listdir(base_address)])
+
+        characters = list()
+
+        for alphabet in alphabets:
+            characters.extend([os.path.join(alphabet, character_folder) for character_folder in os.listdir(alphabet)])
+        characters.sort()
+
         num_train_classes = self.num_train_classes
         num_val_classes = self.num_val_classes
 
-        folders = [os.path.join(self.database_address, class_name) for class_name in os.listdir(self.database_address)]
-        folders.sort()
-        random.shuffle(folders)
-        train_folders = folders[:num_train_classes]
-        val_folders = folders[num_train_classes:num_train_classes + num_val_classes]
-        test_folders = folders[num_train_classes + num_val_classes:]
+        random.shuffle(characters)
+        train_chars = characters[:num_train_classes]
+        val_chars = characters[num_train_classes:num_train_classes + num_val_classes]
+        test_chars = characters[num_train_classes + num_val_classes:]
 
-        return train_folders, val_folders, test_folders
+        train_classes = {char: [os.path.join(char, instance) for instance in os.listdir(char)] for char in train_chars}
+        val_classes = {char: [os.path.join(char, instance) for instance in os.listdir(char)] for char in val_chars}
+        test_classes = {char: [os.path.join(char, instance) for instance in os.listdir(char)] for char in test_chars}
+
+        return train_classes, val_classes, test_classes
 
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
@@ -450,17 +474,6 @@ class OmniglotDatabase(Database):
             return 1 - (image / 255.)
 
         return parse_function
-
-    def prepare_database(self) -> None:
-        for item in ('images_background', 'images_evaluation'):
-            alphabets = os.listdir(os.path.join(self.raw_database_address, item))
-            for alphabet in alphabets:
-                alphabet_address = os.path.join(self.raw_database_address, item, alphabet)
-                for character in os.listdir(alphabet_address):
-                    character_address = os.path.join(alphabet_address, character)
-                    destination_address = os.path.join(self.database_address, alphabet + '_' + character)
-                    if not os.path.exists(destination_address):
-                        shutil.copytree(character_address, destination_address)
 
 
 class MiniImagenetDatabase(Database):
@@ -475,7 +488,7 @@ class MiniImagenetDatabase(Database):
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         dataset_folders = list()
         for dataset_type in ('train', 'val', 'test'):
-            dataset_base_address = os.path.join(self.database_address, dataset_type)
+            dataset_base_address = os.path.join(self.raw_database_address, dataset_type)
             folders = [
                 os.path.join(dataset_base_address, class_name) for class_name in os.listdir(dataset_base_address)
             ]
@@ -491,10 +504,6 @@ class MiniImagenetDatabase(Database):
             return image / 255.
 
         return parse_function
-
-    def prepare_database(self) -> None:
-        if not os.path.exists(self.database_address):
-            shutil.copytree(self.raw_database_address, self.database_address)
 
 
 class CelebADatabase(Database):
@@ -677,7 +686,13 @@ class CelebADatabase(Database):
 
         return identities
 
-    def __init__(self, config=None, input_shape=(84, 84, 3)):
+    def __init__(self, input_shape=(84, 84, 3)):
+        # Celeba has tow different kind of tasks and we keep it backward compatible. In fact this is the only dataset
+        # which makes a copy of itself in data directory.
+        self.raw_database_address = settings.CELEBA_RAW_DATA_ADDRESS
+        self.database_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task')
+        self.prepare_database()
+
         super(CelebADatabase, self).__init__(
             settings.CELEBA_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/identification_task'),
@@ -743,7 +758,7 @@ class CelebADatabase(Database):
 
 
 class LFWDatabase(Database):
-    def __init__(self, config=None, input_shape=(84, 84, 3)):
+    def __init__(self, input_shape=(84, 84, 3)):
         super(LFWDatabase, self).__init__(
             settings.LFW_RAW_DATA_ADDRESS,
             os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/lfw/'),
@@ -751,14 +766,10 @@ class LFWDatabase(Database):
             input_shape=input_shape
         )
 
-    def prepare_database(self) -> None:
-        if not os.path.exists(self.database_address):
-            shutil.copytree(self.raw_database_address, self.database_address)
-
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         # TODO fix this
         dataset_folders = [
-            os.path.join(self.database_address, class_name) for class_name in os.listdir(self.database_address)
+            os.path.join(self.database_address, class_name) for class_name in os.listdir(self.raw_database_address)
         ]
 
         return dataset_folders, dataset_folders, dataset_folders
@@ -775,16 +786,13 @@ class LFWDatabase(Database):
 
 
 class VGGFace2Database(Database):
-    def __init__(self, config=None, input_shape=(84, 84, 3)):
+    def __init__(self, input_shape=(84, 84, 3)):
         super(VGGFace2Database, self).__init__(
             settings.VGG_FACE2,
             settings.VGG_FACE2,
             random_seed=-1,
             input_shape=input_shape
         )
-
-    def prepare_database(self) -> None:
-        pass
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         # TODO fix this
@@ -814,6 +822,160 @@ class VGGFace2Database(Database):
 
         return parse_function
 
+
+class EuroSatDatabase(Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(EuroSatDatabase, self).__init__(
+            settings.EUROSAT_RAW_DATASET_ADDRESS,
+            settings.EUROSAT_RAW_DATASET_ADDRESS,
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
+        base = os.path.join(self.database_address, '2750')
+        folders = [os.path.join(base, folder_name) for folder_name in os.listdir(base)]
+
+        return folders, folders, folders
+
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse_function
+
+
+class PlantDiseaseDatabase(Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(PlantDiseaseDatabase, self).__init__(
+            settings.PLANT_DISEASE_DATASET_ADDRESS,
+            settings.PLANT_DISEASE_DATASET_ADDRESS,
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
+        train_base = os.path.join(self.database_address, 'dataset', 'train')
+        test_base = os.path.join(self.database_address, 'dataset', 'test')
+        train_folders = [os.path.join(train_base, folder_name) for folder_name in os.listdir(train_base)]
+        test_folders = [os.path.join(test_base, folder_name) for folder_name in os.listdir(test_base)]
+
+        return train_folders, test_folders, test_folders
+
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse_function
+
+
+class ISICDatabase(Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(ISICDatabase, self).__init__(
+            settings.ISIC_RAW_DATASET_ADDRESS,
+            settings.ISIC_RAW_DATASET_ADDRESS,
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse_function
+
+    def get_train_val_test_folders(self):
+        gt_file = os.path.join(
+            self.database_address,
+            'ISIC2018_Task3_Training_GroundTruth',
+            'ISIC2018_Task3_Training_GroundTruth.csv'
+        )
+        content = pd.read_csv(gt_file)
+        class_names = list(content.columns[1:])
+
+        images = list(content.iloc[:, 0])
+
+        labels = np.array(content.iloc[:, 1:])
+        labels = np.argmax(labels, axis=1)
+
+        classes = dict()
+        for class_name in class_names:
+            classes[class_name] = list()
+
+        for image, label in zip(images, labels):
+            classes[class_names[label]].append(
+                os.path.join(self.database_address, 'ISIC2018_Task3_Training_Input', image + '.jpg')
+            )
+
+        return classes, classes, classes
+
+
+class ChestXRay8Database(Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(ChestXRay8Database, self).__init__(
+            settings.CHESTX_RAY8_RAW_DATASET_ADDRESS,
+            settings.CHESTX_RAY8_RAW_DATASET_ADDRESS,
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_png(tf.io.read_file(example_address), channels=3)
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+            return image / 255.
+
+        return parse_function
+
+    def get_train_val_test_folders(self):
+        # At first we have to index the addresses with image names since ground truth does not have the path but just
+        # the image
+        images_paths = dict()
+
+        for folder_name in os.listdir(os.path.join(self.database_address, 'data')):
+            if os.path.isdir(os.path.join(self.database_address, 'data', folder_name)):
+                base_address = os.path.join(self.database_address, 'data', folder_name)
+                for item in os.listdir(os.path.join(base_address, 'images')):
+                    images_paths[item] = os.path.join(base_address, 'images', item)
+
+        gt_file = os.path.join(self.database_address, 'data', 'Data_Entry_2017.csv')
+        class_names = [
+            "Atelectasis", "Cardiomegaly", "Effusion", "Infiltration", "Mass", "Nodule", "Pneumonia", "Pneumothorax"
+        ]
+
+        content = pd.read_csv(gt_file)
+        images = list(content.iloc[:, 0])
+
+        labels = np.asarray(content.iloc[:, 1])
+
+        classes = dict()
+        for class_name in class_names:
+            classes[class_name] = list()
+
+        for image, label in zip(images, labels):
+            label = label.split("|")
+            if (
+                    len(label) == 1 and
+                    label[0] != "No Finding" and
+                    label[0] != "Pneumonia" and
+                    label[0] in class_names
+            ):
+                classes[label[0]].append(images_paths[image])
+
+        return classes, classes, classes
 
 if __name__ == '__main__':
     database = MiniImagenetDatabase()

@@ -155,7 +155,7 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
         accs = list()
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
             task_number += 1
-            if task_number % (self.least_number_of_tasks_val_test // 20) == 0:
+            if task_number % (self.number_of_tasks_test // 20) == 0:
                 print(f'{task_number} finished.')
             train_labels = combine_first_two_axes(train_labels)
             val_labels = combine_first_two_axes(val_labels)
@@ -257,7 +257,8 @@ def run_celeba():
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=1000,
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
         clip_gradients=True,
         experiment_name='celeba'
     )

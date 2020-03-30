@@ -4,7 +4,8 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, VGGFace2Database
+from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, VGGFace2Database, \
+    ISICDatabase, EuroSatDatabase, PlantDiseaseDatabase, ChestXRay8Database
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model, VGGSmallModel
 from models.base_model import BaseModel
 from utils import combine_first_two_axes, average_gradients
@@ -12,17 +13,13 @@ import settings
 
 
 # TODO
-# Train and get reasonable results to make sure that the implementation does not have any bugs.
-
 # Visualize all validation tasks just once.
-
 
 # Fix tests and add tests for UMTRA.
 
 # Test visualization could be done on all images or some of them
 
-# Make it possible to train on multiple GPUs (Not very necassary now), but we have to make it fast with tf.function.
-# Add evaluation without implementing the inner loop to test the correctness.
+# Make it possible to train on multiple GPUs (Not very necessary now), but we have to make it fast with tf.function.
 
 
 class ModelAgnosticMetaLearningModel(BaseModel):
@@ -44,7 +41,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         meta_learning_rate,
         report_validation_frequency,
         log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
-        least_number_of_tasks_val_test=-1,  # Make sure the validaiton and test dataset pick at least this many tasks.
+        number_of_tasks_val=-1,  # Make sure the validation pick this many tasks.
+        number_of_tasks_test=-1,  # Make sure the validation pick this many tasks.
         clip_gradients=False,
         experiment_name=None
     ):
@@ -62,7 +60,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.save_after_iterations = save_after_iterations
         self.log_train_images_after_iteration = log_train_images_after_iteration
         self.report_validation_frequency = report_validation_frequency
-        self.least_number_of_tasks_val_test = least_number_of_tasks_val_test
+        self.number_of_tasks_val = number_of_tasks_val
+        self.number_of_tasks_test = number_of_tasks_test
         self.clip_gradients = clip_gradients
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
@@ -120,10 +119,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             meta_batch_size=1,
             reshuffle_each_iteration=False
         )
-        steps_per_epoch = max(val_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
         val_dataset = val_dataset.repeat(-1)
-        val_dataset = val_dataset.take(steps_per_epoch)
-        setattr(val_dataset, 'steps_per_epoch', steps_per_epoch)
+        val_dataset = val_dataset.take(self.number_of_tasks_val)
+        setattr(val_dataset, 'steps_per_epoch', self.number_of_tasks_val)
         return val_dataset
 
     def get_test_dataset(self, seed=-1):
@@ -135,10 +133,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             meta_batch_size=1,
             seed=seed
         )
-        steps_per_epoch = max(test_dataset.steps_per_epoch, self.least_number_of_tasks_val_test)
         test_dataset = test_dataset.repeat(-1)
-        test_dataset = test_dataset.take(steps_per_epoch)
-        setattr(test_dataset, 'steps_per_epoch', steps_per_epoch)
+        test_dataset = test_dataset.take(self.number_of_tasks_test)
+        setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
         return test_dataset
 
     def get_config_info(self):
@@ -341,7 +338,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             np.random.seed(None)
 
         print(
-            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.least_number_of_tasks_val_test)}'
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
         )
         return np.mean(accs)
 
@@ -644,18 +641,26 @@ def run_omniglot():
         network_cls=SimpleModel,
         n=5,
         k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
+        k_test=1,
         meta_batch_size=32,
-        num_steps_ml=10,
+        num_steps_ml=1,
         lr_inner_ml=0.4,
-        num_steps_validation=10,
-        save_after_epochs=500,
+        num_steps_validation=1,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
         report_validation_frequency=50,
-        log_train_images_after_iteration=-1,
+        log_train_images_after_iteration=1000,
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
+        clip_gradients=False,
+        experiment_name='omniglot'
     )
 
-    maml.train(epochs=4000)
-    # maml.evaluate(iterations=50, epochs_to_load_from=500)
+    maml.train(iterations=60000)
+    # maml.evaluate(iterations=50)
 
 
 def run_mini_imagenet():
@@ -678,7 +683,8 @@ def run_mini_imagenet():
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=1000,
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
         clip_gradients=True,
         experiment_name='mini_imagenet'
     )
@@ -710,7 +716,8 @@ def run_celeba():
         meta_learning_rate=0.000005,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=1000,
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
         clip_gradients=True,
         experiment_name='vgg_face2_conv128_mlr_0.0001'
     )
@@ -722,8 +729,44 @@ def run_celeba():
     maml.evaluate(50, seed=42)
 
 
+def run_isic():
+    # isic_database = ISICDatabase()
+    # eurosat_database = EuroSatDatabase()
+    # plant_disease_database = PlantDiseaseDatabase()
+    chestx_ray_database = ChestXRay8Database()
+    maml = ModelAgnosticMetaLearningModel(
+        # database=isic_database,
+        # database=eurosat_database,
+        # database=plant_disease_database,
+        database=chestx_ray_database,
+        network_cls=MiniImagenetModel,
+        n=5,
+        k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
+        k_test=5,
+        meta_batch_size=1,
+        num_steps_ml=1,
+        lr_inner_ml=0.05,
+        num_steps_validation=5,
+        save_after_iterations=5000,
+        meta_learning_rate=0.001,
+        report_validation_frequency=250,
+        log_train_images_after_iteration=1000,
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
+        clip_gradients=True,
+        experiment_name='chestx'
+    )
+
+    maml.train(iterations=60000)
+    maml.evaluate(50, seed=42)
+
+
 if __name__ == '__main__':
     # tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
     # run_mini_imagenet()
-    run_celeba()
+    # run_celeba()
+    run_isic()
