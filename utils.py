@@ -20,6 +20,17 @@ def average_gradients(tower_grads, losses):
     return average_grads
 
 
+def keep_keys_with_greater_than_equal_k_items(folders_dict, k):
+    """Gets a dictionary and just keeps the keys which have greater than equal k items."""
+    to_be_removed = list()
+    for folder in folders_dict.keys():
+        if len(folders_dict[folder]) < k:
+            to_be_removed.append(folder)
+
+    for folder in to_be_removed:
+        del folders_dict[folder]
+
+
 def get_folders_with_greater_than_equal_k_files(folders, k):
     to_be_removed = list()
     for folder in folders:

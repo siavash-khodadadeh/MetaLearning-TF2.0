@@ -18,8 +18,8 @@ class TestDatabases(unittest.TestCase):
 
         self.databases = [
             OmniglotDatabase(random_seed=-1, num_train_classes=1200, num_val_classes=100),
-            MiniImagenetDatabase(random_seed=-1),
-            CelebADatabase(random_seed=-1),
+            MiniImagenetDatabase(),
+            CelebADatabase(),
         ]
 
     def get_dataset(
