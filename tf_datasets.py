@@ -240,6 +240,7 @@ class Database(ABC):
             one_hot_labels: bool = True,
             reshuffle_each_iteration: bool = True,
             seed: int = -1,
+            dtype=tf.float32, #  The input dtype
     ) -> tf.data.Dataset:
         """Folders can be a dictionary and also real name of folders.
         If it is a dictionary then each item is the class name and the corresponding values are the file addressses
@@ -266,9 +267,24 @@ class Database(ABC):
 
             return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
 
+        if seed != -1:
+            parallel_iterations = 1
+        else:
+            parallel_iterations = None
+
         def parse_function(tr_imgs_addresses, val_imgs_addresses):
-            tr_imgs = tf.map_fn(self._get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
-            val_imgs = tf.map_fn(self._get_parse_function(), val_imgs_addresses, dtype=tf.float32)
+            tr_imgs = tf.map_fn(
+                self._get_parse_function(),
+                tr_imgs_addresses,
+                dtype=dtype,
+                parallel_iterations=parallel_iterations
+            )
+            val_imgs = tf.map_fn(
+                self._get_parse_function(),
+                val_imgs_addresses,
+                dtype=dtype,
+                parallel_iterations=parallel_iterations
+            )
 
             return tf.stack(tr_imgs), tf.stack(val_imgs)
 
@@ -276,7 +292,7 @@ class Database(ABC):
         # folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
         steps_per_epoch = len(folders.keys()) // (n * meta_batch_size)
 
-        dataset = tf.data.Dataset.from_tensor_slices(list(folders.keys()))
+        dataset = tf.data.Dataset.from_tensor_slices(sorted(list(folders.keys())))
         if seed != -1:
             dataset = dataset.shuffle(
                 buffer_size=len(folders.keys()),
@@ -286,7 +302,10 @@ class Database(ABC):
             # When using a seed the map should be done in the same order so no parallel execution
             dataset = dataset.map(_get_instances, num_parallel_calls=1)
         else:
-            dataset = dataset.shuffle(buffer_size=len(folders), reshuffle_each_iteration=reshuffle_each_iteration)
+            dataset = dataset.shuffle(
+                buffer_size=len(folders.keys()),
+                reshuffle_each_iteration=reshuffle_each_iteration
+            )
             dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
         dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -713,6 +732,8 @@ class CelebADatabase(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            # For face recognition ablation study uncomment this line
+            # image = tf.image.resize(image, (84, 84))
             image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
 
@@ -976,6 +997,7 @@ class ChestXRay8Database(Database):
                 classes[label[0]].append(images_paths[image])
 
         return classes, classes, classes
+
 
 if __name__ == '__main__':
     database = MiniImagenetDatabase()

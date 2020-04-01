@@ -8,5 +8,5 @@ pandas
 #  Just for plots and graphs
 matplotlib
 seaborn
-
-
+# for face recognition
+face_recognition
