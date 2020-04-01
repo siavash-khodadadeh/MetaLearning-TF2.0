@@ -117,7 +117,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             k=self.k,
             k_validation=self.k_val_val,
             meta_batch_size=1,
-            reshuffle_each_iteration=False
+            # reshuffle_each_iteration=False
         )
         val_dataset = val_dataset.repeat(-1)
         val_dataset = val_dataset.take(self.number_of_tasks_val)
@@ -312,7 +312,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         accs = list()
         losses = list()
         losses_func = self.get_losses_of_tasks_batch_evaluation(iterations)
+        counter = 0
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
+            if counter % (self.number_of_tasks_test // 20) == 0:
+                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+
+            counter += 1
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
                 losses_func,
                 elems=(
@@ -429,7 +434,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         val_counter = 0
         loss_func = self.get_losses_of_tasks_batch_evaluation(self.num_steps_validation)
-        for (train_ds, val_ds), (train_labels, val_labels) in self.val_dataset:
+        for (train_ds, val_ds), (train_labels, val_labels) in self.get_val_dataset():
             val_counter += 1
             # TODO fix validation logging
             # if val_counter % 5 == 0:
@@ -572,7 +577,6 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
     def train(self, iterations=5):
         self.train_dataset = self.get_train_dataset()
-        self.val_dataset = self.get_val_dataset()
         iteration_count = self.load_model()
         epoch_count = iteration_count // self.train_dataset.steps_per_epoch
 
@@ -694,8 +698,8 @@ def run_mini_imagenet():
 
 
 def run_celeba():
-    # celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
-    celeba_database = CelebADatabase(input_shape=(224, 224, 3))
+    celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
+    # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
     # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     maml = ModelAgnosticMetaLearningModel(
@@ -707,13 +711,13 @@ def run_celeba():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=5,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=1,
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_iterations=5000,
-        meta_learning_rate=0.000005,
+        meta_learning_rate=0.0001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
@@ -725,8 +729,8 @@ def run_celeba():
     # 260000 iteration with meta learning rate 0.0001
     # from there start with 0.00001
     # from 310000 start with 0.000005
-    # maml.train(iterations=360000)
-    maml.evaluate(50, seed=42)
+    maml.train(iterations=500000)
+    # maml.evaluate(50, seed=42)
 
 
 def run_isic():
@@ -760,7 +764,7 @@ def run_isic():
         experiment_name='chestx'
     )
 
-    maml.train(iterations=60000)
+    # maml.train(iterations=60000)
     maml.evaluate(50, seed=42)
 
 
@@ -768,5 +772,5 @@ if __name__ == '__main__':
     # tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
     # run_mini_imagenet()
-    # run_celeba()
-    run_isic()
+    run_celeba()
+    # run_isic()

@@ -91,28 +91,46 @@ Then set the value of CELEBA_RAW_DATA_ADDRESS variable in settings.py to the add
 
 Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to publish your research.
 
-
 ### LFW
 http://vis-www.cs.umass.edu/lfw/lfw-deepfunneled.tgz
 
-### ISIC
+The four following datasets are added for the cross-domain meta-learning challenge and 
+the description to download is based on https://github.com/IBM/cdfsl-benchmark
+
+
+### EuroSAT:
+
+Home: http://madm.dfki.de/downloads
+
+Direct: http://madm.dfki.de/files/sentinel/EuroSAT.zip
+
+Set the address of the settings variable to extracted folder.
+
+### ISIC2018:
+
 Home: http://challenge2018.isic-archive.com
 
 Direct (must login): https://challenge.kitware.com/#phase/5abcbc6f56357d0139260e66
 
 Go to direct link and download training dataset and download ground truth data
 put both zip files in the same folder and unzip them.
-
-There should be two folders in the new folder you created
-
-ISIC2018_Task3_Training_GroundTruth
-
-ISIC2018_Task3_Training_Input
-
+There should be two folders in the new folder you created:
+ISIC2018_Task3_Training_GroundTruth, ISIC2018_Task3_Training_Input.
 Set the variable ISIC_RAW_DATASET_ADDRESS in local_settings.py for yourself.
 
+### Plant Disease:
 
-### ChestX-Ray8
+Home: https://www.kaggle.com/saroz014/plant-disease/
+
+Direct: command line kaggle datasets download -d plant-disease/data
+
+Set the setting variable to the address of the pland-disease
+
+### ChestX-Ray8:
+
+Home: https://www.kaggle.com/nih-chest-xrays/data
+
+Direct: command line kaggle datasets download -d nih-chest-xrays/data
 
 Download the data.zip and put it in a folder (for example names ChestX-Ray8) and unzip 
 it after copying it in that folder. Then set the variable for RAW_DATASET_ADDRESS

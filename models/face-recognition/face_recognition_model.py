@@ -2,9 +2,10 @@ import os
 
 import tensorflow as tf
 import numpy as np
-# import face_recognition
+import face_recognition
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
+from networks.maml_umtra_networks import MiniImagenetModel
 from tf_datasets import CelebADatabase, LFWDatabase
 from utils import combine_first_two_axes, get_folders_with_greater_than_equal_k_files
 import tensorflow_addons as tfa
@@ -179,13 +180,21 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
 
         print(f'accuracy mean: {np.mean(accs)}')
         print(f'accuracy std: {np.std(accs)}')
+        print(
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+        )
         return np.mean(accs)
 
     def evaluate_with_original_face_recognition(self, iterations, iterations_to_load_from=None, seed=-1):
         self.test_dataset = self.get_test_dataset(seed)
 
         accs = list()
+        counter = 0
+
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
+            if counter % 50 == 0:
+                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+            counter += 1
             train_labels = combine_first_two_axes(train_labels)
             val_labels = combine_first_two_axes(val_labels)
 
@@ -233,6 +242,9 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
 
         print(f'accuracy mean: {np.mean(accs)}')
         print(f'accuracy std: {np.std(accs)}')
+        print(
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+        )
         return np.mean(accs)
 
 
@@ -241,8 +253,8 @@ def run_celeba():
     # celeba_database = LFWDatabase()
     maml = FaceRecognition(
         database=celeba_database,
-        # network_cls=MiniImagenetModel,
-        network_cls=VGGSmallModel,
+        network_cls=MiniImagenetModel,
+        # network_cls=VGGSmallModel,
         n=5,
         k=1,
         k_val_ml=5,
@@ -264,11 +276,12 @@ def run_celeba():
     )
 
     # maml.train(iterations=100)
-    maml.evaluate(5, seed=42)
+    # maml.evaluate(5, seed=42)
+    maml.evaluate_with_original_face_recognition(5, seed=42)
 
 
 if __name__ == '__main__':
-    # tf.config.set_visible_devices([], 'GPU')
+    tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
     # run_mini_imagenet()
     run_celeba()
