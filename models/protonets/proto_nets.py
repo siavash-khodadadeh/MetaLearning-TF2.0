@@ -1,10 +1,10 @@
-import os
-
 import tensorflow as tf
+import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.proto_networks import SimpleModelProto
 from tf_datasets import OmniglotDatabase
+from utils import combine_first_two_axes
 
 
 class PrototypicalNetworks(ModelAgnosticMetaLearningModel):
@@ -28,51 +28,33 @@ class PrototypicalNetworks(ModelAgnosticMetaLearningModel):
             val_seed=-1,
             experiment_name=None
     ):
-        self.experiment_name = experiment_name if experiment_name is not None else ''
-        self.n = n
-        self.k = k
-        self.k_val_ml = k_val_ml
-        self.k_val_val = k_val_val
-        self.k_val_test = k_val_test
-        self.k_test = k_test
-        self.meta_batch_size = meta_batch_size
-        self.save_after_iterations = save_after_iterations
-        self.log_train_images_after_iteration = log_train_images_after_iteration
-        self.report_validation_frequency = report_validation_frequency
-        self.number_of_tasks_val = number_of_tasks_val
-        self.number_of_tasks_test = number_of_tasks_test
-        self.val_seed = val_seed
-        super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
-        self.model = self.initialize_network()
+        super(ModelAgnosticMetaLearningModel, self).__init__(
+            database=database,
+            network_cls=network_cls,
+            n=n,
+            k=k,
+            k_val_ml=k_val_ml,
+            k_val_val=k_val_val,
+            k_val_test=k_val_test,
+            k_test=k_test,
+            meta_batch_size=meta_batch_size,
+            meta_learning_rate=meta_learning_rate,
+            save_after_iterations=save_after_iterations,
+            report_validation_frequency=report_validation_frequency,
+            log_train_images_after_iteration=log_train_images_after_iteration,
+            number_of_tasks_val=number_of_tasks_val,
+            number_of_tasks_test=number_of_tasks_test,
+            val_seed=val_seed,
+            experiment_name=experiment_name,
+        )
 
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=meta_learning_rate)
-        self.val_accuracy_metric = tf.metrics.Accuracy()
-        self.val_loss_metric = tf.metrics.Mean()
-
-        self._root = self.get_root()
-        self.train_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/train/')
-        self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
-        self.val_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/val/')
-        self.val_summary_writer = tf.summary.create_file_writer(self.val_log_dir)
-
-        self.checkpoint_dir = os.path.join(self._root, self.get_config_info(), 'saved_models/')
-
-        self.train_accuracy_metric = tf.metrics.Accuracy()
-        self.train_loss_metric = tf.metrics.Mean()
-
-    def get_root(self):
-        return os.path.dirname(__file__)
-
-    def get_config_info(self):
-        config_str = f'model-{self.network_cls.name}_' \
-                     f'mbs-{self.meta_batch_size}_' \
-                     f'n-{self.n}_' \
-                     f'k-{self.k}_'
-        if self.experiment_name != '':
-            config_str += '_' + self.experiment_name
-
-        return config_str
+    def get_config_str(self):
+        return f'model-{self.network_cls.name}_' \
+               f'mbs-{self.meta_batch_size}_' \
+               f'n-{self.n}_' \
+               f'k-{self.k}_' \
+               f'kvalml-{self.k_val_ml}'
 
     def initialize_network(self):
         model = self.network_cls()
@@ -80,32 +62,57 @@ class PrototypicalNetworks(ModelAgnosticMetaLearningModel):
 
         return model
 
+    def convert_labels_to_real_labels(self, labels):
+        return tf.argmax(labels, axis=-1)
+
+    def get_losses_of_tasks_batch(self, inputs):
+        pass
+
+    def get_loss_func(self, use_val_batch_statistics=True):
+        @tf.function
+        def f(inputs):
+            train_ds, val_ds, train_labels, val_labels = inputs
+            train_ds = combine_first_two_axes(train_ds)
+            val_ds = combine_first_two_axes(val_ds)
+
+            ce_loss, predictions, query_labels = self.proto_net(
+                training=use_val_batch_statistics,
+                support_set=train_ds,
+                query_set=val_ds,
+                query_labels=val_labels
+            )
+            real_labels = self.convert_labels_to_real_labels(val_labels)
+            val_acc = tf.reduce_mean(tf.cast(tf.equal(predictions, real_labels), tf.float32))
+            return val_acc, ce_loss
+
+        return f
+
     def report_validation_loss_and_accuracy(self, epoch_count):
+        loss_func = self.get_loss_func()
         self.val_loss_metric.reset_states()
         self.val_accuracy_metric.reset_states()
 
         val_counter = 0
-        for tmb, lmb in self.val_dataset:
+        for (train_ds, val_ds), (train_labels, val_labels) in self.get_val_dataset():
             val_counter += 1
-            for task, labels in zip(tmb, lmb):
-                support_set, query_set, support_labels, query_labels = self.get_task_train_and_val_ds(task, labels)
-                if val_counter % 5 == 0:
-                    step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
-                    self.log_images(self.val_summary_writer, support_set, query_set, step)
-
-                ce_loss, predictions, query_classes = self.proto_net(
-                    support_set,
-                    query_set,
-                    query_labels,
-                    training=False
-                )
-                self.train_loss_metric.update_state(ce_loss)
-                self.val_loss_metric.update_state(ce_loss)
-                self.val_accuracy_metric.update_state(query_classes, predictions)
+            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
+                loss_func,
+                elems=(
+                    train_ds,
+                    val_ds,
+                    train_labels,
+                    val_labels,
+                ),
+                dtype=(tf.float32, tf.float32),
+                parallel_iterations=1
+            )
+            final_loss = tf.reduce_mean(tasks_final_losses)
+            final_acc = tf.reduce_mean(tasks_final_accuracy)
+            self.val_loss_metric.update_state(final_loss)
+            self.val_accuracy_metric.update_state(final_acc)
 
         self.log_metric(self.val_summary_writer, 'Loss', self.val_loss_metric, step=epoch_count)
         self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
-
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
 
@@ -132,63 +139,49 @@ class PrototypicalNetworks(ModelAgnosticMetaLearningModel):
 
         return ce_loss, predictions, query_classes
 
-    @tf.function
-    def get_losses_of_tasks_batch(self, inputs):
-        task, labels, iteration_count = inputs
-
-        support_set, query_set, support_labels, query_labels = self.get_task_train_and_val_ds(task, labels)
-
-        if self.log_train_images_after_iteration != -1 and \
-                iteration_count % self.log_train_images_after_iteration == 0:
-
-            self.log_images(self.train_summary_writer, support_set, query_set, step=iteration_count)
-
-            with tf.device('cpu:0'):
-                with self.train_summary_writer.as_default():
-                    for var in self.model.variables:
-                        tf.summary.histogram(var.name, var, step=iteration_count)
-
-        # implement prototypcial network for one task
-        ce_loss, predictions, query_classes = self.proto_net(support_set, query_set, query_labels, training=True)
-
-        self.train_loss_metric.update_state(ce_loss)
-        self.train_accuracy_metric.update_state(
-            query_classes,
-            predictions
-        )
-        return ce_loss
-
-    def evaluate(self, epochs_to_load_from=None):
+    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
         self.test_dataset = self.get_test_dataset()
-        self.load_model(epochs=epochs_to_load_from)
-        test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
-        test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+        self.load_model(iterations=iterations_to_load_from)
 
-        test_accuracy_metric = tf.metrics.Accuracy()
-        test_loss_metric = tf.metrics.Mean()
+        accs = list()
+        losses = list()
+        loss_func = self.get_loss_func(use_val_batch_statistics=use_val_batch_statistics)
 
-        for tmb, lmb in self.test_dataset:
-            for task, labels in zip(tmb, lmb):
-                support_set, query_set, support_labels, query_labels = self.get_task_train_and_val_ds(task, labels)
-                ce_loss, predictions, query_classes = self.proto_net(
-                    support_set,
-                    query_set,
-                    query_labels,
-                    training=False
-                )
-                test_loss_metric.update_state(ce_loss)
-                test_accuracy_metric.update_state(
-                    query_classes,
-                    predictions
-                )
+        counter = 0
+        for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
+            remainder_num = self.number_of_tasks_test // 20
+            if remainder_num == 0:
+                remainder_num = 1
+            if counter % remainder_num == 0:
+                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
+                loss_func,
+                elems=(
+                    train_ds,
+                    val_ds,
+                    train_labels,
+                    val_labels,
+                ),
+                dtype=(tf.float32, tf.float32),
+                parallel_iterations=1
+            )
+            final_loss = tf.reduce_mean(tasks_final_losses)
+            final_acc = tf.reduce_mean(tasks_final_accuracy)
+            losses.append(final_loss)
+            accs.append(final_acc)
 
-            self.log_metric(test_summary_writer, 'Loss', test_loss_metric, step=1)
-            self.log_metric(test_summary_writer, 'Accuracy', test_accuracy_metric, step=1)
+        print(f'loss mean: {np.mean(losses)}')
+        print(f'loss std: {np.std(losses)}')
+        print(f'accuracy mean: {np.mean(accs)}')
+        print(f'accuracy std: {np.std(accs)}')
+        # Free the seed :D
+        if seed != -1:
+            np.random.seed(None)
 
-            print('Test Loss: {}'.format(test_loss_metric.result().numpy()))
-            print('Test Accuracy: {}'.format(test_accuracy_metric.result().numpy()))
-
-        return test_accuracy_metric.result().numpy()
+        print(
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+        )
+        return np.mean(accs)
 
 
 def run_omniglot():
