@@ -256,7 +256,7 @@ class BaseModel(metaclass=SetupCaller):
             tasks_final_accs = list()
 
             for i in range(self.meta_batch_size):
-                task_final_loss, task_final_acc = self.get_losses_of_tasks_batch(
+                task_final_acc, task_final_loss = self.get_losses_of_tasks_batch(method='train')(
                     (train_ds[i, ...], val_ds[i, ...], train_labels[i, ...], val_labels[i, ...])
                 )
                 tasks_final_losses.append(task_final_loss)
@@ -273,8 +273,97 @@ class BaseModel(metaclass=SetupCaller):
 
         return final_acc, final_loss
 
+    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
+        """If you set use val batch statistics to true, then the batch information from all the test samples will be
+        used for batch normalization layers (like MAML experiments), otherwise batch normalization layers use the
+        average and variance which they learned during the updates."""
+        self.test_dataset = self.get_test_dataset(seed=seed)
+        self.load_model(iterations=iterations_to_load_from)
+
+        accs = list()
+        losses = list()
+        losses_func = self.get_losses_of_tasks_batch(
+            method='test',
+            iterations=iterations,
+            use_val_batch_statistics=use_val_batch_statistics
+        )
+        counter = 0
+        for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
+            remainder_num = self.number_of_tasks_test // 20
+            if remainder_num == 0:
+                remainder_num = 1
+            if counter % remainder_num == 0:
+                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+
+            counter += 1
+            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
+                losses_func,
+                elems=(
+                    train_ds,
+                    val_ds,
+                    train_labels,
+                    val_labels,
+                ),
+                dtype=(tf.float32, tf.float32),
+                parallel_iterations=1
+            )
+            final_loss = tf.reduce_mean(tasks_final_losses)
+            final_acc = tf.reduce_mean(tasks_final_accuracy)
+            losses.append(final_loss)
+            accs.append(final_acc)
+
+        print(f'loss mean: {np.mean(losses)}')
+        print(f'loss std: {np.std(losses)}')
+        print(f'accuracy mean: {np.mean(accs)}')
+        print(f'accuracy std: {np.std(accs)}')
+        # Free the seed :D
+        if seed != -1:
+            np.random.seed(None)
+
+        print(
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+        )
+        return np.mean(accs)
+
+    def report_validation_loss_and_accuracy(self, epoch_count):
+        self.val_loss_metric.reset_states()
+        self.val_accuracy_metric.reset_states()
+
+        val_counter = 0
+        loss_func = self.get_losses_of_tasks_batch(method='val')
+        for (train_ds, val_ds), (train_labels, val_labels) in self.get_val_dataset():
+            val_counter += 1
+            # TODO fix validation logging
+            # if val_counter % 5 == 0:
+            #     step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
+            #     # pick the first task in meta batch
+            #     log_train_ds = combine_first_two_axes(train_ds[0, ...])
+            #     log_val_ds = combine_first_two_axes(val_ds[0, ...])
+            #     self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
+
+            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
+                loss_func,
+                elems=(
+                    train_ds,
+                    val_ds,
+                    train_labels,
+                    val_labels,
+                ),
+                dtype=(tf.float32, tf.float32),
+                parallel_iterations=1
+            )
+            final_loss = tf.reduce_mean(tasks_final_losses)
+            final_acc = tf.reduce_mean(tasks_final_accuracy)
+            self.val_loss_metric.update_state(final_loss)
+            self.val_accuracy_metric.update_state(final_acc)
+
+        self.log_metric(self.val_summary_writer, 'Loss', self.val_loss_metric, step=epoch_count)
+        self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
+        print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
+        print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
+
     @abstractmethod
-    def get_losses_of_tasks_batch(self, inputs):
+    def get_losses_of_tasks_batch(self, method='train', **kwargs):
         pass
 
     @abstractmethod
@@ -283,8 +372,4 @@ class BaseModel(metaclass=SetupCaller):
 
     @abstractmethod
     def get_config_str(self):
-        pass
-
-    @abstractmethod
-    def report_validation_loss_and_accuracy(self, iteration_count):
         pass
