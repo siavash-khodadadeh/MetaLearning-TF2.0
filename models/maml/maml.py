@@ -43,6 +43,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
         number_of_tasks_val=-1,  # Make sure the validation pick this many tasks.
         number_of_tasks_test=-1,  # Make sure the validation pick this many tasks.
+        val_seed=-1,  # The seed for validation dataset. -1 means change the samples for each report.
         clip_gradients=False,
         experiment_name=None
     ):
@@ -63,6 +64,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.number_of_tasks_val = number_of_tasks_val
         self.number_of_tasks_test = number_of_tasks_test
         self.clip_gradients = clip_gradients
+        self.val_seed = val_seed
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
         self.model = self.initialize_network()
@@ -117,7 +119,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             k=self.k,
             k_validation=self.k_val_val,
             meta_batch_size=1,
-            # reshuffle_each_iteration=False
+            seed=self.val_seed,
         )
         val_dataset = val_dataset.repeat(-1)
         val_dataset = val_dataset.take(self.number_of_tasks_val)
@@ -167,9 +169,11 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
             elif isinstance(model.layers[i], tf.keras.layers.BatchNormalization):
                 if hasattr(model.layers[i], 'moving_mean') and model.layers[i].moving_mean is not None:
-                    updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
+                    # updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
+                    updated_model.layers[i].moving_mean = model.layers[i].moving_mean
                 if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
-                    updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
+                    # updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
+                    updated_model.layers[i].moving_variance = model.layers[i].moving_variance
                 if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
                     updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
                     k += 1
@@ -279,7 +283,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return iteration_count
 
-    def get_losses_of_tasks_batch_evaluation(self, iterations):
+    def get_losses_of_tasks_batch_evaluation(self, iterations, use_val_batch_statistics=True):
         @tf.function
         def f(inputs):
             train_ds, val_ds, train_labels, val_labels = inputs
@@ -287,8 +291,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             val_ds = combine_first_two_axes(val_ds)
 
             updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
-            # For comparison with MAML paper set the training=True
-            updated_model_logits = updated_model(val_ds, training=True)
+            updated_model_logits = updated_model(val_ds, training=use_val_batch_statistics)
             val_loss = self.outer_loss(val_labels, updated_model_logits)
 
             predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
@@ -300,7 +303,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return f
 
-    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1):
+    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
+        """If you set use val batch statistics to true, then the batch information from all the test samples will be
+        used for batch normalization layers (like MAML experiments), otherwise batch normalization layers use the
+        average and variance which they learned during the updates."""
         self.test_dataset = self.get_test_dataset(seed=seed)
         self.load_model(iterations=iterations_to_load_from)
         test_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/test/')
@@ -311,10 +317,16 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         accs = list()
         losses = list()
-        losses_func = self.get_losses_of_tasks_batch_evaluation(iterations)
+        losses_func = self.get_losses_of_tasks_batch_evaluation(
+            iterations,
+            use_val_batch_statistics=use_val_batch_statistics
+        )
         counter = 0
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
-            if counter % (self.number_of_tasks_test // 20) == 0:
+            remainder_num = self.number_of_tasks_test // 20
+            if remainder_num == 0:
+                remainder_num = 1
+            if counter % remainder_num == 0:
                 print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
 
             counter += 1
@@ -398,13 +410,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     'train',
                     train_ds,
                     step=step,
-                    max_outputs=10
+                    max_outputs=self.n * (self.k + self.k_val_ml)
                 )
                 tf.summary.image(
                     'validation',
                     val_ds,
                     step=step,
-                    max_outputs=10
+                    max_outputs=self.n * (self.k + self.k_val_ml)
                 )
 
     def update_loss_and_accuracy(self, logits, labels, loss_metric, accuracy_metric):
@@ -433,7 +445,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.val_accuracy_metric.reset_states()
 
         val_counter = 0
-        loss_func = self.get_losses_of_tasks_batch_evaluation(self.num_steps_validation)
+        loss_func = self.get_losses_of_tasks_batch_evaluation(self.num_steps_validation, use_val_batch_statistics=False)
         for (train_ds, val_ds), (train_labels, val_labels) in self.get_val_dataset():
             val_counter += 1
             # TODO fix validation logging
@@ -653,18 +665,18 @@ def run_omniglot():
         num_steps_ml=1,
         lr_inner_ml=0.4,
         num_steps_validation=1,
-        save_after_iterations=15000,
+        save_after_iterations=1000,
         meta_learning_rate=0.001,
         report_validation_frequency=50,
-        log_train_images_after_iteration=1000,
+        log_train_images_after_iteration=200,
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=False,
         experiment_name='omniglot'
     )
 
-    maml.train(iterations=60000)
-    # maml.evaluate(iterations=50)
+    # maml.train(iterations=5000)
+    maml.evaluate(iterations=50)
 
 
 def run_mini_imagenet():
@@ -678,7 +690,7 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=50,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -690,11 +702,12 @@ def run_mini_imagenet():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='mini_imagenet'
+        experiment_name='mini_imagenet_with_batch_norm_exp2'
     )
 
-    # maml.train(iterations=60000)
-    maml.evaluate(50, seed=14)
+    maml.train(iterations=60000)
+    maml.evaluate(50, seed=42, use_val_batch_statistics=True)
+    maml.evaluate(50, seed=42, use_val_batch_statistics=False)
 
 
 def run_celeba():
@@ -721,7 +734,7 @@ def run_celeba():
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        number_of_tasks_test=10,
         clip_gradients=True,
         experiment_name='vgg_face2_conv128_mlr_0.0001'
     )
@@ -729,8 +742,8 @@ def run_celeba():
     # 260000 iteration with meta learning rate 0.0001
     # from there start with 0.00001
     # from 310000 start with 0.000005
-    maml.train(iterations=500000)
-    # maml.evaluate(50, seed=42)
+    # maml.train(iterations=500000)
+    maml.evaluate(50, seed=42)
 
 
 def run_isic():
@@ -771,6 +784,6 @@ def run_isic():
 if __name__ == '__main__':
     # tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
-    # run_mini_imagenet()
-    run_celeba()
+    run_mini_imagenet()
+    # run_celeba()
     # run_isic()
