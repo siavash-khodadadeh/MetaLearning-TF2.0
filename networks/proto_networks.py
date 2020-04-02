@@ -9,13 +9,13 @@ class SimpleModelProto(tf.keras.Model):
         super(SimpleModelProto, self).__init__(name='simple_model')
 
         self.conv1 = tf.keras.layers.Conv2D(64, 3, name='conv1', strides=(2, 2), padding='same')
-        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
+        self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
         self.conv2 = tf.keras.layers.Conv2D(64, 3, name='conv2', strides=(2, 2), padding='same')
-        self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
+        self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
         self.conv3 = tf.keras.layers.Conv2D(64, 3, name='conv3', strides=(2, 2), padding='same')
-        self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
+        self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
         self.conv4 = tf.keras.layers.Conv2D(64, 3, name='conv4',  strides=(2, 2), padding='same')
-        self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
+        self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
         self.flatten = Flatten(name='flatten')
 
     def conv_block(self, features, conv, bn=None, training=False):

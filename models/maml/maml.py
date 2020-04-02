@@ -208,24 +208,18 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         )
         return loss
 
-    @tf.function
-    def get_losses_of_tasks_batch(self, inputs, method='train'):
-        train_ds, val_ds, train_labels, val_labels, = inputs
-        train_ds = combine_first_two_axes(train_ds)
-        val_ds = combine_first_two_axes(val_ds)
+    def get_losses_of_tasks_batch(self, method='train', **kwargs):
+        if method == 'train':
+            return self.get_losses_of_tasks_batch_maml(iterations=-1, training=True)
+        elif method == 'val':
+            return self.get_losses_of_tasks_batch_maml(iterations=self.num_steps_validation, training=False)
+        elif method == 'test':
+            return self.get_losses_of_tasks_batch_maml(
+                iterations=kwargs['iterations'],
+                training=kwargs['use_val_batch_statistics']
+            )
 
-        updated_model = self.inner_train_loop(train_ds, train_labels, -1)
-        updated_model_logits = updated_model(val_ds, training=True)
-        val_loss = self.outer_loss(val_labels, updated_model_logits)
-
-        predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
-        real_labels = self.convert_labels_to_real_labels(val_labels)
-
-        val_acc = tf.reduce_mean(tf.cast(tf.equal(predicted_class_labels, real_labels), tf.float32))
-
-        return val_loss, val_acc
-
-    def get_losses_of_tasks_batch_evaluation(self, iterations, use_val_batch_statistics=True):
+    def get_losses_of_tasks_batch_maml(self, iterations, training=True):
         @tf.function
         def f(inputs):
             train_ds, val_ds, train_labels, val_labels = inputs
@@ -233,7 +227,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             val_ds = combine_first_two_axes(val_ds)
 
             updated_model = self.inner_train_loop(train_ds, train_labels, iterations)
-            updated_model_logits = updated_model(val_ds, training=use_val_batch_statistics)
+            updated_model_logits = updated_model(val_ds, training=training)
             val_loss = self.outer_loss(val_labels, updated_model_logits)
 
             predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
@@ -244,95 +238,6 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             return val_acc, val_loss
 
         return f
-
-
-    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
-        """If you set use val batch statistics to true, then the batch information from all the test samples will be
-        used for batch normalization layers (like MAML experiments), otherwise batch normalization layers use the
-        average and variance which they learned during the updates."""
-        self.test_dataset = self.get_test_dataset(seed=seed)
-        self.load_model(iterations=iterations_to_load_from)
-
-        accs = list()
-        losses = list()
-        losses_func = self.get_losses_of_tasks_batch_evaluation(
-            iterations,
-            use_val_batch_statistics=use_val_batch_statistics
-        )
-        counter = 0
-        for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
-            remainder_num = self.number_of_tasks_test // 20
-            if remainder_num == 0:
-                remainder_num = 1
-            if counter % remainder_num == 0:
-                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
-
-            counter += 1
-            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
-                losses_func,
-                elems=(
-                    train_ds,
-                    val_ds,
-                    train_labels,
-                    val_labels,
-                ),
-                dtype=(tf.float32, tf.float32),
-                parallel_iterations=1
-            )
-            final_loss = tf.reduce_mean(tasks_final_losses)
-            final_acc = tf.reduce_mean(tasks_final_accuracy)
-            losses.append(final_loss)
-            accs.append(final_acc)
-
-        print(f'loss mean: {np.mean(losses)}')
-        print(f'loss std: {np.std(losses)}')
-        print(f'accuracy mean: {np.mean(accs)}')
-        print(f'accuracy std: {np.std(accs)}')
-        # Free the seed :D
-        if seed != -1:
-            np.random.seed(None)
-
-        print(
-            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
-        )
-        return np.mean(accs)
-
-    def report_validation_loss_and_accuracy(self, epoch_count):
-        self.val_loss_metric.reset_states()
-        self.val_accuracy_metric.reset_states()
-
-        val_counter = 0
-        loss_func = self.get_losses_of_tasks_batch_evaluation(self.num_steps_validation, use_val_batch_statistics=False)
-        for (train_ds, val_ds), (train_labels, val_labels) in self.get_val_dataset():
-            val_counter += 1
-            # TODO fix validation logging
-            # if val_counter % 5 == 0:
-            #     step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
-            #     # pick the first task in meta batch
-            #     log_train_ds = combine_first_two_axes(train_ds[0, ...])
-            #     log_val_ds = combine_first_two_axes(val_ds[0, ...])
-            #     self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
-
-            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
-                loss_func,
-                elems=(
-                    train_ds,
-                    val_ds,
-                    train_labels,
-                    val_labels,
-                ),
-                dtype=(tf.float32, tf.float32),
-                parallel_iterations=1
-            )
-            final_loss = tf.reduce_mean(tasks_final_losses)
-            final_acc = tf.reduce_mean(tasks_final_accuracy)
-            self.val_loss_metric.update_state(final_loss)
-            self.val_accuracy_metric.update_state(final_acc)
-
-        self.log_metric(self.val_summary_writer, 'Loss', self.val_loss_metric, step=epoch_count)
-        self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
-        print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
-        print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
 
     def convert_labels_to_real_labels(self, labels):
         return tf.argmax(labels, axis=-1)
@@ -393,7 +298,7 @@ def run_mini_imagenet():
         num_steps_validation=5,
         save_after_iterations=15000,
         meta_learning_rate=0.001,
-        report_validation_frequency=250,
+        report_validation_frequency=25,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
         number_of_tasks_test=10,
@@ -401,7 +306,7 @@ def run_mini_imagenet():
         experiment_name='mini_imagenet_with_batch_norm_exp2'
     )
 
-    maml.train(iterations=60010)
+    maml.train(iterations=60040)
     maml.evaluate(50, seed=42, use_val_batch_statistics=True)
     maml.evaluate(50, seed=42, use_val_batch_statistics=False)  # TODO add momentum=0.0 to evaluate
 
