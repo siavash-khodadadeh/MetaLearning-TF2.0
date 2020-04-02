@@ -9,13 +9,13 @@ class SimpleModel(tf.keras.Model):
         super(SimpleModel, self).__init__(name='simple_model')
 
         self.conv1 = tf.keras.layers.Conv2D(64, 3, name='conv1', strides=(2, 2), padding='same')
-        self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
+        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
         self.conv2 = tf.keras.layers.Conv2D(64, 3, name='conv2', strides=(2, 2), padding='same')
-        self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
+        self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
         self.conv3 = tf.keras.layers.Conv2D(64, 3, name='conv3', strides=(2, 2), padding='same')
-        self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
+        self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
         self.conv4 = tf.keras.layers.Conv2D(64, 3, name='conv4',  strides=(2, 2), padding='same')
-        self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
+        self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
         self.flatten = Flatten(name='flatten')
         self.dense = Dense(num_classes, activation=None, name='dense')
 
@@ -44,16 +44,16 @@ class MiniImagenetModel(tf.keras.Model):
         super(MiniImagenetModel, self).__init__(name='mini_imagenet_model')
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
         self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
-        self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
+        self.bn1 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn1')
         # self.bn1 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn1')
         self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
-        self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
+        self.bn2 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn2')
         # self.bn2 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn2')
         self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
-        self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
+        self.bn3 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn3')
         # self.bn3 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn3')
         self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
-        self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
+        self.bn4 = tf.keras.layers.BatchNormalization(momentum=0.0, center=True, scale=False, name='bn4')
         # self.bn4 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn4')
         self.flatten = Flatten(name='flatten')
 
@@ -189,3 +189,25 @@ class VGG19Model(tf.keras.models.Model):
         output = self.fc2(output)
         output = self.fc3(output)
         return output
+
+def name_repr(name):
+    def wrapper(func):
+        func.name = name
+        return func
+    return wrapper
+
+@name_repr('TransferNet')
+def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
+    if transfer:
+        base_model = getattr(tf.keras.applications, architecture)(include_top=False, weights='imagenet', input_shape=(84, 84, 3))
+        base_model.trainable = False
+    else:
+        base_model = getattr(tf.keras.applications, architecture)(include_top=False, weights=None, input_shape=(84, 84, 3))
+
+    flatten = tf.keras.layers.Flatten(name='flatten')(base_model.output)
+    fc1 = tf.keras.layers.Dense(512, name='fc1', activation='relu')(flatten)
+    fc2 = tf.keras.layers.Dense(512, name='fc2', activation='relu')(fc1)
+    fc3 = tf.keras.layers.Dense(num_classes, name='fc3', activation=None)(fc2)
+
+    model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc3], name='TransferNet')
+    return model
