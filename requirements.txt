@@ -1,4 +1,4 @@
-tensorflow-gpu
+tensorflow-gpu  # or you can use tf-nightly-gpu for faster versions.
 tensorflow-addons
 mock
 tqdm

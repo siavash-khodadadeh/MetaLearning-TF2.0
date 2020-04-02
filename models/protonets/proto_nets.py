@@ -14,25 +14,34 @@ class PrototypicalNetworks(ModelAgnosticMetaLearningModel):
             network_cls,
             n,
             k,
+            k_val_ml,
+            k_val_val,
+            k_val_test,
+            k_test,
             meta_batch_size,
-            save_after_epochs,
+            save_after_iterations,
             meta_learning_rate,
             report_validation_frequency,
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
-            least_number_of_tasks_val_test=-1,
-            # Make sure the validaiton and test dataset pick at least this many tasks.
-            clip_gradients=False,
+            number_of_tasks_val=-1,
+            number_of_tasks_test=-1,
+            val_seed=-1,
             experiment_name=None
     ):
         self.experiment_name = experiment_name if experiment_name is not None else ''
         self.n = n
         self.k = k
+        self.k_val_ml = k_val_ml
+        self.k_val_val = k_val_val
+        self.k_val_test = k_val_test
+        self.k_test = k_test
         self.meta_batch_size = meta_batch_size
-        self.save_after_epochs = save_after_epochs
+        self.save_after_iterations = save_after_iterations
         self.log_train_images_after_iteration = log_train_images_after_iteration
         self.report_validation_frequency = report_validation_frequency
-        self.least_number_of_tasks_val_test = least_number_of_tasks_val_test
-        self.clip_gradients = clip_gradients
+        self.number_of_tasks_val = number_of_tasks_val
+        self.number_of_tasks_test = number_of_tasks_test
+        self.val_seed = val_seed
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
         self.model = self.initialize_network()

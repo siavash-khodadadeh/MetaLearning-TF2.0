@@ -55,16 +55,17 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.k_val_test = k_val_test
         self.k_test = k_test
         self.meta_batch_size = meta_batch_size
-        self.num_steps_ml = num_steps_ml
-        self.lr_inner_ml = lr_inner_ml
-        self.num_steps_validation = num_steps_validation
         self.save_after_iterations = save_after_iterations
         self.log_train_images_after_iteration = log_train_images_after_iteration
         self.report_validation_frequency = report_validation_frequency
         self.number_of_tasks_val = number_of_tasks_val
         self.number_of_tasks_test = number_of_tasks_test
-        self.clip_gradients = clip_gradients
         self.val_seed = val_seed
+
+        self.num_steps_ml = num_steps_ml
+        self.num_steps_validation = num_steps_validation
+        self.lr_inner_ml = lr_inner_ml
+        self.clip_gradients = clip_gradients
         super(ModelAgnosticMetaLearningModel, self).__init__(database, network_cls)
 
         self.model = self.initialize_network()
@@ -707,7 +708,7 @@ def run_mini_imagenet():
 
     maml.train(iterations=60000)
     maml.evaluate(50, seed=42, use_val_batch_statistics=True)
-    maml.evaluate(50, seed=42, use_val_batch_statistics=False)
+    maml.evaluate(50, seed=42, use_val_batch_statistics=False)  # TODO add momentum=0.0 to evaluate
 
 
 def run_celeba():
