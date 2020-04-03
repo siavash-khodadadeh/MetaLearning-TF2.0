@@ -194,7 +194,7 @@ class VGG19Model(tf.keras.models.Model):
 
 
 @name_repr('TransferNet')
-def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
+def get_transfer_net(architecture='MobileNet', num_classes=10, transfer=True):
     if transfer:
         base_model = getattr(tf.keras.applications, architecture)(
             include_top=False,
@@ -210,11 +210,9 @@ def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
             input_shape=(84, 84, 3)
         )
 
-    # tf.keras.applications.vgg16.preprocess_input
-
     flatten = tf.keras.layers.Flatten(name='flatten')(base_model.output)
-    fc1 = tf.keras.layers.Dense(128, name='fc1', activation='relu')(flatten)
-    fc2 = tf.keras.layers.Dense(128, name='fc2', activation='relu')(fc1)
+    fc1 = tf.keras.layers.Dense(512, name='fc1', activation='relu')(flatten)
+    fc2 = tf.keras.layers.Dense(512, name='fc2', activation='relu')(fc1)
     fc3 = tf.keras.layers.Dense(num_classes, name='fc3', activation=None)(fc2)
 
     model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc3], name='TransferNet')
