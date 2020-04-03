@@ -174,9 +174,9 @@ def run_celeba():
         experiment_name='vgg_face2_pronet_conv128_mlr_0.0001'
     )
 
-
     proto_net.train(iterations=10)
     proto_net.evaluate(-1)
+
 
 if __name__ == '__main__':
     # run_omniglot()
