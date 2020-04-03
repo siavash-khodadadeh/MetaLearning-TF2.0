@@ -1,3 +1,7 @@
+from typing import Callable
+
+import tensorflow as tf
+
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import get_transfer_net
 from tf_datasets import MiniImagenetDatabase
@@ -5,6 +9,16 @@ from tf_datasets import MiniImagenetDatabase
 
 class TransferLearning(ModelAgnosticMetaLearningModel):
     pass
+
+
+class MiniImagenetDatabasePreProcess(MiniImagenetDatabase):
+    def _get_parse_function(self) -> Callable:
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.keras.applications.vgg16.preprocess_input(image)
+            return image
+
+        return parse_function
 
 
 def run_mini_imagenet():
