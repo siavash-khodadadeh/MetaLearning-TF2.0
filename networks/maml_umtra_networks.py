@@ -1,6 +1,8 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Conv2D, Flatten, Dense, Input, BatchNormalization
 
+from decorators import name_repr
+
 
 class SimpleModel(tf.keras.Model):
     name = 'SimpleModel'
@@ -189,3 +191,31 @@ class VGG19Model(tf.keras.models.Model):
         output = self.fc2(output)
         output = self.fc3(output)
         return output
+
+
+@name_repr('TransferNet')
+def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
+    if transfer:
+        base_model = getattr(tf.keras.applications, architecture)(
+            include_top=False,
+            weights='imagenet',
+            input_shape=(84, 84, 3),
+        )
+        base_model.trainable = False
+    else:
+        base_model = getattr(
+            tf.keras.applications, architecture)(
+            include_top=False,
+            weights=None,
+            input_shape=(84, 84, 3)
+        )
+
+    # tf.keras.applications.vgg16.preprocess_input
+
+    flatten = tf.keras.layers.Flatten(name='flatten')(base_model.output)
+    fc1 = tf.keras.layers.Dense(128, name='fc1', activation='relu')(flatten)
+    fc2 = tf.keras.layers.Dense(128, name='fc2', activation='relu')(fc1)
+    fc3 = tf.keras.layers.Dense(num_classes, name='fc3', activation=None)(fc2)
+
+    model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc3], name='TransferNet')
+    return model

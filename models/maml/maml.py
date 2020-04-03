@@ -70,9 +70,6 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         self.num_steps_validation = num_steps_validation
         self.lr_inner_ml = lr_inner_ml
         self.clip_gradients = clip_gradients
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=meta_learning_rate)
-        self.network_cls = network_cls
-        self.model = self.initialize_network()
         self.updated_models = list()
 
         for _ in range(self.num_steps_ml + 1):
@@ -103,41 +100,42 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         variables = list()
 
         for i in range(len(model.layers)):
-            if (isinstance(model.layers[i], tf.keras.layers.Conv2D) or
-                    isinstance(model.layers[i], tf.keras.layers.Dense)):
-                updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
-                k += 1
-                variables.append(updated_model.layers[i].kernel)
+            if model.layers[i].trainable:
+                if (isinstance(model.layers[i], tf.keras.layers.Conv2D) or
+                        isinstance(model.layers[i], tf.keras.layers.Dense)):
+                    updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
+                    k += 1
+                    variables.append(updated_model.layers[i].kernel)
 
-                updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
-                k += 1
-                variables.append(updated_model.layers[i].bias)
+                    updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
+                    k += 1
+                    variables.append(updated_model.layers[i].bias)
 
-            elif isinstance(model.layers[i], tf.keras.layers.BatchNormalization):
-                if hasattr(model.layers[i], 'moving_mean') and model.layers[i].moving_mean is not None:
-                    # updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
-                    updated_model.layers[i].moving_mean = model.layers[i].moving_mean
-                if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
-                    # updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
-                    updated_model.layers[i].moving_variance = model.layers[i].moving_variance
-                if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
-                    updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
-                    k += 1
-                    variables.append(updated_model.layers[i].gamma)
-                if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                    updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
-                    k += 1
-                    variables.append(updated_model.layers[i].beta)
+                elif isinstance(model.layers[i], tf.keras.layers.BatchNormalization):
+                    if hasattr(model.layers[i], 'moving_mean') and model.layers[i].moving_mean is not None:
+                        # updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
+                        updated_model.layers[i].moving_mean = model.layers[i].moving_mean
+                    if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
+                        # updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
+                        updated_model.layers[i].moving_variance = model.layers[i].moving_variance
+                    if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
+                        updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                        k += 1
+                        variables.append(updated_model.layers[i].gamma)
+                    if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
+                        updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                        k += 1
+                        variables.append(updated_model.layers[i].beta)
 
-            elif isinstance(model.layers[i], tf.keras.layers.LayerNormalization):
-                if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
-                    updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
-                    k += 1
-                    variables.append(updated_model.layers[i].gamma)
-                if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                    updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
-                    k += 1
-                    variables.append(updated_model.layers[i].beta)
+                elif isinstance(model.layers[i], tf.keras.layers.LayerNormalization):
+                    if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
+                        updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                        k += 1
+                        variables.append(updated_model.layers[i].gamma)
+                    if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
+                        updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                        k += 1
+                        variables.append(updated_model.layers[i].beta)
 
         setattr(updated_model, 'meta_trainable_variables', variables)
 
@@ -298,12 +296,13 @@ def run_mini_imagenet():
         num_steps_validation=5,
         save_after_iterations=15000,
         meta_learning_rate=0.001,
-        report_validation_frequency=25,
+        report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
-        number_of_tasks_test=10,
+        number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='mini_imagenet_with_batch_norm_exp2'
+        experiment_name='mini_imagenet_with_batch_norm_exp2',
+        val_seed=42,
     )
 
     maml.train(iterations=60040)
