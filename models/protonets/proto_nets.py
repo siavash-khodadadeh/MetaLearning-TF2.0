@@ -2,8 +2,8 @@ import tensorflow as tf
 import numpy as np
 
 from models.base_model import BaseModel
-from networks.proto_networks import SimpleModelProto
-from tf_datasets import OmniglotDatabase
+from networks.proto_networks import SimpleModelProto, VGGSmallModel
+from tf_datasets import OmniglotDatabase, VGGFace2Database
 from utils import combine_first_two_axes
 
 
@@ -147,7 +147,37 @@ def run_omniglot():
     proto_net.evaluate(-1)
 
 
+def run_celeba():
+    celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
+    # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
+    # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
+    # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
+    proto_net = PrototypicalNetworks(
+        database=celeba_database,
+        network_cls=VGGSmallModel,
+        # network_cls=MiniImagenetModel,
+        n=5,
+        k=1,
+        k_val_ml=5,
+        k_val_val=15,
+        k_val_test=15,
+        k_test=1,
+        meta_batch_size=32,
+        save_after_iterations=10,
+        meta_learning_rate=0.0001,
+        report_validation_frequency=250,
+        log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
+        val_seed=-1,
+        experiment_name='vgg_face2_pronet_conv128_mlr_0.0001'
+    )
+
+
+    proto_net.train(iterations=10)
+    proto_net.evaluate(-1)
+
 if __name__ == '__main__':
-    run_omniglot()
+    # run_omniglot()
     # run_mini_imagenet()
-    # run_celeba()
+    run_celeba()
