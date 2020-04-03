@@ -15,6 +15,7 @@ class MiniImagenetDatabasePreProcess(MiniImagenetDatabase):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.cast(image, tf.float32)
             image = tf.keras.applications.vgg16.preprocess_input(image)
             return image
 
@@ -22,7 +23,7 @@ class MiniImagenetDatabasePreProcess(MiniImagenetDatabase):
 
 
 def run_mini_imagenet():
-    mini_imagenet_database = MiniImagenetDatabase()
+    mini_imagenet_database = MiniImagenetDatabasePreProcess()
     transfer_learning = TransferLearning(
         database=mini_imagenet_database,
         network_cls=get_transfer_net,
@@ -31,7 +32,7 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=50,
+        k_test=5,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -43,10 +44,10 @@ def run_mini_imagenet():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='mini_imagenet'
+        experiment_name='fixed_vgg_16_with_three_layers'
     )
 
-    # transfer_learning.train(iterations=60000)
+    transfer_learning.train(iterations=60000)
     transfer_learning.evaluate(50, seed=14)
 
 
