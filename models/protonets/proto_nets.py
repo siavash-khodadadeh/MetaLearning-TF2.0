@@ -67,13 +67,13 @@ class PrototypicalNetworks(BaseModel):
 
     def get_losses_of_tasks_batch(self, method='train', **kwargs):
         if method == 'train':
-            return self.get_loss_func(training=True)
+            return self.get_loss_func(training=True, k=self.k)
         elif method == 'val':
-            return self.get_loss_func(training=False)
+            return self.get_loss_func(training=False, k=self.k)
         elif method == 'test':
-            return self.get_loss_func(training=kwargs['use_val_batch_statistics'])
+            return self.get_loss_func(training=kwargs['use_val_batch_statistics'], k=self.k_test)
 
-    def get_loss_func(self, training=True):
+    def get_loss_func(self, training, k):
         @tf.function
         def f(inputs):
             train_ds, val_ds, train_labels, val_labels = inputs
@@ -84,7 +84,8 @@ class PrototypicalNetworks(BaseModel):
                 training=training,
                 support_set=train_ds,
                 query_set=val_ds,
-                query_labels=val_labels
+                query_labels=val_labels,
+                k=k
             )
             real_labels = self.convert_labels_to_real_labels(val_labels)
             val_acc = tf.reduce_mean(tf.cast(tf.equal(predictions, real_labels), tf.float32))
@@ -101,10 +102,10 @@ class PrototypicalNetworks(BaseModel):
         b = tf.tile(tf.expand_dims(b, axis=0), (N, 1, 1))
         return tf.reduce_mean(tf.square(a - b), axis=2)
 
-    def proto_net(self, support_set, query_set, query_labels, training):
+    def proto_net(self, support_set, query_set, query_labels, training, k):
         support_set = self.model(support_set, training=True)
         query_set = self.model(query_set, training=training)
-        support_set = tf.reshape(support_set, (self.n, self.k, -1))
+        support_set = tf.reshape(support_set, (self.n, k, -1))
         support_set = tf.reduce_mean(support_set, axis=1)
         dists = self.euclidean_distance(support_set, query_set)
         log_p_y = tf.transpose(tf.nn.log_softmax(-dists))
@@ -131,9 +132,9 @@ def run_omniglot():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
+        k_test=3,
         meta_batch_size=32,
-        save_after_iterations=15000,
+        save_after_iterations=1000,
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
@@ -143,7 +144,7 @@ def run_omniglot():
         experiment_name=None
     )
 
-    proto_net.train(iterations=60000)
+    proto_net.train(iterations=1000)
     proto_net.evaluate(-1)
 
 
