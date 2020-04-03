@@ -199,7 +199,7 @@ def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
         base_model = getattr(tf.keras.applications, architecture)(
             include_top=False,
             weights='imagenet',
-            input_shape=(84, 84, 3),
+            input_shape=(224, 224, 3),
         )
         base_model.trainable = False
     else:
@@ -207,7 +207,7 @@ def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
             tf.keras.applications, architecture)(
             include_top=False,
             weights=None,
-            input_shape=(84, 84, 3)
+            input_shape=(224, 224, 3)
         )
 
     flatten = tf.keras.layers.Flatten(name='flatten')(base_model.output)
