@@ -194,7 +194,7 @@ class VGG19Model(tf.keras.models.Model):
 
 
 @name_repr('TransferNet')
-def get_transfer_net(architecture='MobileNet', num_classes=10, transfer=True):
+def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
     if transfer:
         base_model = getattr(tf.keras.applications, architecture)(
             include_top=False,
