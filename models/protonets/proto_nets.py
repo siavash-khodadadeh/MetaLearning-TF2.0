@@ -69,7 +69,7 @@ class PrototypicalNetworks(BaseModel):
         if method == 'train':
             return self.get_loss_func(training=True, k=self.k)
         elif method == 'val':
-            return self.get_loss_func(training=False, k=self.k)
+            return self.get_loss_func(training=True, k=self.k)
         elif method == 'test':
             return self.get_loss_func(training=kwargs['use_val_batch_statistics'], k=self.k_test)
 
@@ -145,10 +145,12 @@ def run_omniglot():
     )
 
     proto_net.train(iterations=1000)
-    proto_net.evaluate(-1)
+    # proto_net.evaluate(-1)
 
 
 def run_celeba():
+    from models.protonets.inception_resnet_v1 import InceptionResNetV1
+
     celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
     # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
@@ -156,6 +158,7 @@ def run_celeba():
     proto_net = PrototypicalNetworks(
         database=celeba_database,
         network_cls=VGGSmallModel,
+        # network_cls=InceptionResNetV1,
         # network_cls=MiniImagenetModel,
         n=5,
         k=1,
@@ -163,22 +166,29 @@ def run_celeba():
         k_val_val=15,
         k_val_test=15,
         k_test=1,
-        meta_batch_size=32,
-        save_after_iterations=10,
+        meta_batch_size=4,
+        save_after_iterations=500,
+        # meta_learning_rate=0.001,
         meta_learning_rate=0.0001,
-        report_validation_frequency=250,
+        report_validation_frequency=500,
         log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
-        val_seed=-1,
-        experiment_name='vgg_face2_pronet_conv128_mlr_0.0001'
+        val_seed=42,
+        # experiment_name='mb_16_mlr001'
+        experiment_name='mb_16mlr000005'
     )
-
-    proto_net.train(iterations=10)
-    proto_net.evaluate(-1)
+    # Start with 0.00005
+    # From 44000 train with smaller learning rate 0.000001
+    # From 59000 train with smaller learning rate 0.0000005
+    proto_net.train(iterations=90000)
+    # proto_net.evaluate(-1, seed=42)
 
 
 if __name__ == '__main__':
     # run_omniglot()
     # run_mini_imagenet()
+    # from datetime import datetime
+    # begin_time = datetime.now()
     run_celeba()
+    # print(datetime.now() - begin_time)

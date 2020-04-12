@@ -78,7 +78,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
     def initialize_network(self):
         model = self.network_cls(num_classes=self.n)
-        model(tf.zeros(shape=(self.n * self.k, *self.database.input_shape)))
+        model(tf.zeros(shape=(1, *self.database.input_shape)))
         return model
 
     def get_config_str(self):
@@ -95,7 +95,15 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             outer_gradients = [tf.clip_by_value(grad, -10, 10) for grad in outer_gradients]
         return outer_gradients
 
-    def create_meta_model(self, updated_model, model, gradients):
+    def apply_update(self, var, val, grad, variables, assign):
+        new_val = val - self.lr_inner_ml * grad
+        if assign:
+            var.assign(new_val)
+        else:
+            var = new_val
+        variables.append(var)
+
+    def create_meta_model(self, updated_model, model, gradients, assign=False):
         k = 0
         variables = list()
 
@@ -103,39 +111,52 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             if model.layers[i].trainable:
                 if (isinstance(model.layers[i], tf.keras.layers.Conv2D) or
                         isinstance(model.layers[i], tf.keras.layers.Dense)):
-                    updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
+                    self.apply_update(
+                        updated_model.layers[i].kernel,
+                        model.layers[i].kernel,
+                        gradients[k],
+                        variables,
+                        assign
+                    )
                     k += 1
-                    variables.append(updated_model.layers[i].kernel)
-
-                    updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
+                    self.apply_update(
+                        updated_model.layers[i].bias,
+                        model.layers[i].bias,
+                        gradients[k],
+                        variables,
+                        assign
+                    )
                     k += 1
-                    variables.append(updated_model.layers[i].bias)
 
                 elif isinstance(model.layers[i], tf.keras.layers.BatchNormalization):
                     if hasattr(model.layers[i], 'moving_mean') and model.layers[i].moving_mean is not None:
-                        # updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
-                        updated_model.layers[i].moving_mean = model.layers[i].moving_mean
+                        if assign:
+                            updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
+                        else:
+                            updated_model.layers[i].moving_mean = model.layers[i].moving_mean
                     if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
-                        # updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
-                        updated_model.layers[i].moving_variance = model.layers[i].moving_variance
+                        if assign:
+                            updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
+                        else:
+                            updated_model.layers[i].moving_variance = model.layers[i].moving_variance
                     if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
-                        updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                        self.apply_update(
+                            updated_model.layers[i].gamma,
+                            model.laeyrs[i].gamma,
+                            gradients[k],
+                            variables,
+                            assign
+                        )
                         k += 1
-                        variables.append(updated_model.layers[i].gamma)
                     if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                        updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                        self.apply_update(
+                            updated_model.layers[i].beta,
+                            model.layers[i].beta,
+                            gradients[k],
+                            variables,
+                            assign
+                        )
                         k += 1
-                        variables.append(updated_model.layers[i].beta)
-
-                elif isinstance(model.layers[i], tf.keras.layers.LayerNormalization):
-                    if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
-                        updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
-                        k += 1
-                        variables.append(updated_model.layers[i].gamma)
-                    if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
-                        updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
-                        k += 1
-                        variables.append(updated_model.layers[i].beta)
 
         setattr(updated_model, 'meta_trainable_variables', variables)
 
@@ -166,12 +187,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             return self.updated_models[-1]
 
         else:
+            # TODO make this part faster: Maybe by stopping gradient since this is not training
             gradients = list()
             for variable in self.model.trainable_variables:
                 gradients.append(tf.zeros_like(variable))
 
             copy_model = self.updated_models[0]
-            self.create_meta_model(self.updated_models[0], self.model, gradients)
+            self.create_meta_model(self.updated_models[0], self.model, gradients, assign=True)
 
             for k in range(num_iterations):
                 with tf.GradientTape(persistent=False) as train_tape:
@@ -179,7 +201,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     logits = copy_model(train_ds, training=True)
                     loss = self.inner_loss(train_labels, logits)
                 gradients = train_tape.gradient(loss, copy_model.meta_trainable_variables)
-                self.create_meta_model(copy_model, copy_model, gradients)
+                self.create_meta_model(copy_model, copy_model, gradients, assign=True)
 
             return copy_model
 
@@ -275,7 +297,7 @@ def run_omniglot():
     )
 
     # maml.train(iterations=5000)
-    maml.evaluate(iterations=50)
+    maml.evaluate(iterations=50, use_val_batch_statistics=True)
 
 
 def run_mini_imagenet():
@@ -334,15 +356,12 @@ def run_celeba():
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
-        number_of_tasks_test=10,
+        number_of_tasks_test=1000,
         clip_gradients=True,
         experiment_name='vgg_face2_conv128_mlr_0.0001'
     )
 
-    # 260000 iteration with meta learning rate 0.0001
-    # from there start with 0.00001
-    # from 310000 start with 0.000005
-    # maml.train(iterations=500000)
+    maml.train(iterations=500000)
     maml.evaluate(50, seed=42)
 
 
@@ -383,7 +402,8 @@ def run_isic():
 
 if __name__ == '__main__':
     # tf.config.set_visible_devices([], 'GPU')
-    # run_omniglot()
-    run_mini_imagenet()
+    # print(tf.__version__)
+    run_omniglot()
+    # run_mini_imagenet()
     # run_celeba()
     # run_isic()
