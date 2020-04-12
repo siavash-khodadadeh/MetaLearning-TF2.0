@@ -92,7 +92,7 @@ class TestDatabases(unittest.TestCase):
             k=5,
             k_validation=5,
             meta_batch_size=4,
-            dtype=tf.string
+            fn_output_signature=tf.string
         )
 
         # Check for covering all classes and no duplicates
@@ -123,7 +123,7 @@ class TestDatabases(unittest.TestCase):
             k_validation=5,
             meta_batch_size=4,
             seed=42,
-            dtype=tf.string
+            fn_output_signature=tf.string
         )
         # Check for covering all classes
         classes = set()
@@ -151,7 +151,7 @@ class TestDatabases(unittest.TestCase):
             k_validation=k_validation,
             meta_batch_size=4,
             one_hot_labels=False,
-            dtype=tf.string
+            fn_output_signature=tf.string
         )
 
         for epoch in range(2):
@@ -196,7 +196,7 @@ class TestDatabases(unittest.TestCase):
             k_validation=k_validation,
             meta_batch_size=4,
             one_hot_labels=False,
-            dtype=tf.string
+            fn_output_signature=tf.string
         )
 
         for epoch in range(4):
@@ -237,7 +237,7 @@ class TestDatabases(unittest.TestCase):
             k_validation=k_validation,
             meta_batch_size=4,
             one_hot_labels=False,
-            dtype=tf.string
+            fn_output_signature=tf.string
         )
 
         for epoch in range(4):
@@ -271,7 +271,7 @@ class TestDatabases(unittest.TestCase):
             k_validation=8,
             meta_batch_size=4,
             one_hot_labels=False,
-            dtype=tf.string
+            fn_output_signature=tf.string
         )
 
         class_instances = dict()
@@ -314,7 +314,7 @@ class TestDatabases(unittest.TestCase):
                 k_validation=3,
                 meta_batch_size=1,
                 seed=42,
-                dtype=tf.string
+                fn_output_signature=tf.string
             )
             val_dataset = val_dataset.repeat(-1)
             val_dataset = val_dataset.take(1000)
