@@ -348,4 +348,3 @@ class TestDatabases(unittest.TestCase):
 
             x_val_string = ','.join(list(map(str, x_val.numpy().reshape(-1))))
             self.assertEqual(x_vals_queue.popleft(), x_val_string)
-

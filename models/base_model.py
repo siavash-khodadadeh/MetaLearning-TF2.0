@@ -277,6 +277,7 @@ class BaseModel(metaclass=SetupCaller):
         """If you set use val batch statistics to true, then the batch information from all the test samples will be
         used for batch normalization layers (like MAML experiments), otherwise batch normalization layers use the
         average and variance which they learned during the updates."""
+        # TODO add ability to set batch norm momentum if use_val_batch_statistics=False
         self.test_dataset = self.get_test_dataset(seed=seed)
         self.load_model(iterations=iterations_to_load_from)
 

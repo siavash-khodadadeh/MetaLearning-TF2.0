@@ -1,12 +1,13 @@
 import os
 
+from tensorflow.keras.models import load_model
 import tensorflow as tf
 import numpy as np
 import face_recognition
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from tf_datasets import CelebADatabase, LFWDatabase
+from tf_datasets import CelebADatabase, LFWDatabase, MiniImagenetDatabase
 from utils import combine_first_two_axes, get_folders_with_greater_than_equal_k_files
 import tensorflow_addons as tfa
 
@@ -149,7 +150,16 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
 
     def evaluate(self, iterations, iterations_to_load_from=None, seed=-1):
         # self.load_model(iterations=51, acc='0.78')
-        self.load_model()
+        # self.load_model()
+        # model = load_model('facenet_keras.h5')
+        model = load_model('/home/siavash/PycharmProjects/facenet/model/facenet_keras.h5')
+        print(model.inputs)
+        print(model.outputs)
+        model.trainable = False
+        self.model = model
+        self.model.summary()
+        # dense = tf.keras.layers.Dense(self.n, activation='softmax')(model.output)
+        # self.model = tf.keras.models.Model(inputs=model.inputs, outputs=dense)
         self.test_dataset = self.get_test_dataset(seed)
 
         task_number = 0
@@ -167,6 +177,7 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
             train_ds = tf.squeeze(train_ds, axis=0)
             train_ds = combine_first_two_axes(train_ds)
             encodings = self.model.predict(train_ds)
+
             from datetime import datetime
             begin = datetime.now()
             val_ds = tf.squeeze(val_ds, axis=0)
@@ -206,6 +217,8 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
 
             train_ds = tf.squeeze(train_ds, axis=0)
             train_ds = combine_first_two_axes(train_ds)
+            val_ds = tf.squeeze(val_ds, axis=0)
+            val_ds = combine_first_two_axes(val_ds)
 
             encodings = []
             labels = []
@@ -221,10 +234,7 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
                     encodings.append([0] * 128)
 
                 labels.append(label)
-            from datetime import datetime
-            begin = datetime.now()
-            val_ds = tf.squeeze(val_ds, axis=0)
-            val_ds = combine_first_two_axes(val_ds)
+
             true_count = 0
             all_count = 0
             for image, label in zip(val_ds, val_labels):
@@ -240,8 +250,6 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
                         true_count += 1
 
                 all_count += 1
-            end = datetime.now()
-            print(end - begin)
 
             task_final_accuracy = true_count / all_count
             accs.append(task_final_accuracy)
@@ -256,7 +264,10 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
 
 def run_celeba():
     celeba_database = CelebADatabase(input_shape=(224, 224, 3))
-    # celeba_database = LFWDatabase()
+    # celeba_database = MiniImagenetDatabase(input_shape=(224, 224, 3))
+    # for facenet
+    # celeba_database = CelebADatabase(input_shape=(160, 160, 3))
+    # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
     maml = FaceRecognition(
         database=celeba_database,
         network_cls=MiniImagenetModel,
@@ -282,12 +293,12 @@ def run_celeba():
     )
 
     # maml.train(iterations=100)
-    # maml.evaluate(5, seed=42)
-    maml.evaluate_with_original_face_recognition(5, seed=42)
+    maml.evaluate(5, seed=42)
+    # maml.evaluate_with_original_face_recognition(5, seed=42)
 
 
 if __name__ == '__main__':
-    tf.config.set_visible_devices([], 'GPU')
+    # tf.config.set_visible_devices([], 'GPU')
     # run_omniglot()
     # run_mini_imagenet()
     run_celeba()
