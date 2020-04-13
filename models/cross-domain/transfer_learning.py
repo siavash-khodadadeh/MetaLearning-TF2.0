@@ -45,7 +45,9 @@ def run_mini_imagenet():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='fixed_vgg_16_with_three_layers'
+        experiment_name='fixed_vgg_16_with_three_layers',
+        val_seed=42,
+        val_test_batch_norm_momentum=0.0,
     )
 
     # transfer_learning.train(iterations=60000)
