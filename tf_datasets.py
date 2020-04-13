@@ -733,11 +733,18 @@ class CelebADatabase(Database):
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             # For face recognition ablation study uncomment this line
-            # image = tf.image.resize(image, (84, 84))
-            image = tf.image.resize(image, self.get_input_shape()[:2])
-            image = tf.cast(image, tf.float32)
 
-            return image / 255.
+            # for face net uncomment this line
+            image = tf.image.resize(image, (160, 160))
+
+            image = tf.cast(image, tf.float32)
+            return (image - 127.5) / 128.0
+
+            # The true parse function
+            # image = tf.image.resize(image, self.get_input_shape()[:2])
+            # image = tf.cast(image, tf.float32)
+            # return image / 127.5 - 1
+            # return image / 255.
 
         return parse_function
 
@@ -782,7 +789,7 @@ class LFWDatabase(Database):
     def __init__(self, input_shape=(84, 84, 3)):
         super(LFWDatabase, self).__init__(
             settings.LFW_RAW_DATA_ADDRESS,
-            os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/lfw/'),
+            settings.LFW_RAW_DATA_ADDRESS,
             random_seed=-1,
             input_shape=input_shape
         )
@@ -798,9 +805,18 @@ class LFWDatabase(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            # For face recognition ablation study uncomment this line
+            # image = tf.image.resize(image, (84, 84))
+
+            # for face net uncomment this line
+            # image = tf.image.resize(image, (160, 160))
+            # image = tf.cast(image, tf.float32)
+            # return (image - 127.5) / 128.0
+
+            # The true parse function
             image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
-
+            # return image / 127.5 - 1
             return image / 255.
 
         return parse_function
@@ -814,6 +830,7 @@ class VGGFace2Database(Database):
             random_seed=-1,
             input_shape=input_shape
         )
+        self.input_shape = (160, 160, 3)
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         # TODO fix this
@@ -836,10 +853,19 @@ class VGGFace2Database(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            # For face recognition ablation study uncomment this line
+            # image = tf.image.resize(image, (84, 84))
+
+            # for face net uncomment this line
+            # image = tf.image.resize(image, (160, 160))
+            #
+            # image = tf.cast(image, tf.float32)
+            # return (image - 127.5) / 128.0
+
+            # The true parse function
             image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
-
-            return image / 255.
+            return image / 127.5 - 1
 
         return parse_function
 

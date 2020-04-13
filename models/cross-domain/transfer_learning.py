@@ -33,7 +33,7 @@ def run_mini_imagenet():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=5,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.005,
@@ -43,13 +43,18 @@ def run_mini_imagenet():
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
-        number_of_tasks_test=100,
+        number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='fixed_vgg_16_with_three_layers'
+        experiment_name='fixed_vgg_16_with_three_layers',
+        val_seed=42,
+        val_test_batch_norm_momentum=0.0,
     )
 
     # transfer_learning.train(iterations=60000)
-    transfer_learning.evaluate(50, seed=14)
+    from datetime import datetime
+    begin_time = datetime.now()
+    transfer_learning.evaluate(200, seed=14)
+    print(datetime.now() - begin_time)
 
 
 if __name__ == '__main__':
