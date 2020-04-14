@@ -126,6 +126,14 @@ Direct: command line kaggle datasets download -d plant-disease/data
 
 Set the setting variable to the address of the pland-disease
 
+If you use this dataset, there is one image which is in png format and you should remove it first. Here is the address
+for that:
+
+dir: plant-disease/dataset/train/Pepper,_bell___healthy/
+
+filename: 42f083e2-272d-4f83-ad9a-573ee90e50ec___Screen Shot 2015-05-06 at 4.01.13 PM.png
+
+
 ### ChestX-Ray8:
 
 Home: https://www.kaggle.com/nih-chest-xrays/data
