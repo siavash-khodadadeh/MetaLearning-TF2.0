@@ -7,7 +7,7 @@ from collections import deque
 import tensorflow as tf
 
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, EuroSatDatabase, \
-    ISICDatabase, ChestXRay8Database
+    ISICDatabase, ChestXRay8Database, PlantDiseaseDatabase
 from utils import combine_first_two_axes
 
 
