@@ -186,9 +186,9 @@ def run_celeba():
 
 
 if __name__ == '__main__':
-    # run_omniglot()
+    run_omniglot()
     # run_mini_imagenet()
     # from datetime import datetime
     # begin_time = datetime.now()
-    run_celeba()
+    # run_celeba()
     # print(datetime.now() - begin_time)
