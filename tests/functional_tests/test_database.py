@@ -7,7 +7,7 @@ from collections import deque
 import tensorflow as tf
 
 from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, EuroSatDatabase, \
-    ISICDatabase, ChestXRay8Database
+    ISICDatabase, ChestXRay8Database, PlantDiseaseDatabase
 from utils import combine_first_two_axes
 
 
@@ -348,4 +348,3 @@ class TestDatabases(unittest.TestCase):
 
             x_val_string = ','.join(list(map(str, x_val.numpy().reshape(-1))))
             self.assertEqual(x_vals_queue.popleft(), x_val_string)
-

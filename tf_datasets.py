@@ -210,114 +210,114 @@ class Database(ABC):
 
         return confusion_matrix, class_ids
 
-    def make_labels_dataset(self, n: int, k: int, k_validation: int, one_hot_labels: bool) -> tf.data.Dataset:
-        """Creates a tf.data.Dataset which generates corresponding labels to meta-learning inputs.
-        This method just creates this dataset for one task and repeats it. You can use zip to combine this dataset
-        with your desired dataset.
-        Note that the repeat is set to -1 so that the dataset will repeat itself. This will allow us to
-        zip it with any other dataset and it will generate labels as much as needed.
-        Also notice that this dataset is not batched into meta batch size, so this will just generate labels for one
-        task."""
-        tr_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k), 0))
-        val_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k_validation), 0))
-
-        if one_hot_labels:
-            tr_labels_ds = tr_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
-            val_labels_ds = val_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
-
-        labels_dataset = tf.data.Dataset.zip((tr_labels_ds, val_labels_ds))
-        labels_dataset = labels_dataset.repeat(-1)
-
-        return labels_dataset
-
-    def get_supervised_meta_learning_dataset(
-            self,
-            folders: List[str],
-            n: int,
-            k: int,
-            k_validation: int,
-            meta_batch_size: int,
-            one_hot_labels: bool = True,
-            reshuffle_each_iteration: bool = True,
-            seed: int = -1,
-            dtype=tf.float32, #  The input dtype
-    ) -> tf.data.Dataset:
-        """Folders can be a dictionary and also real name of folders.
-        If it is a dictionary then each item is the class name and the corresponding values are the file addressses
-        of images of that class."""
-        if seed != -1:
-            np.random.seed(seed)
-
-        if type(folders) == list:
-            classes = dict()
-            for folder in folders:
-                instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
-                classes[folder] = instances
-            folders = classes
-
-        def _get_instances(class_dir_address):
-            def get_instances(class_dir_address):
-                class_dir_address = class_dir_address.numpy().decode('utf-8')
-                instance_names = folders[class_dir_address]
-                # instance_names = [
-                #     os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
-                # ]
-                instances = np.random.choice(instance_names, size=k + k_validation, replace=False)
-                return instances[:k], instances[k:k + k_validation]
-
-            return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
-
-        if seed != -1:
-            parallel_iterations = 1
-        else:
-            parallel_iterations = None
-
-        def parse_function(tr_imgs_addresses, val_imgs_addresses):
-            tr_imgs = tf.map_fn(
-                self._get_parse_function(),
-                tr_imgs_addresses,
-                dtype=dtype,
-                parallel_iterations=parallel_iterations
-            )
-            val_imgs = tf.map_fn(
-                self._get_parse_function(),
-                val_imgs_addresses,
-                dtype=dtype,
-                parallel_iterations=parallel_iterations
-            )
-
-            return tf.stack(tr_imgs), tf.stack(val_imgs)
-
-        keep_keys_with_greater_than_equal_k_items(folders, k + k_validation)
-        # folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
-        steps_per_epoch = len(folders.keys()) // (n * meta_batch_size)
-
-        dataset = tf.data.Dataset.from_tensor_slices(sorted(list(folders.keys())))
-        if seed != -1:
-            dataset = dataset.shuffle(
-                buffer_size=len(folders.keys()),
-                reshuffle_each_iteration=reshuffle_each_iteration,
-                seed=seed
-            )
-            # When using a seed the map should be done in the same order so no parallel execution
-            dataset = dataset.map(_get_instances, num_parallel_calls=1)
-        else:
-            dataset = dataset.shuffle(
-                buffer_size=len(folders.keys()),
-                reshuffle_each_iteration=reshuffle_each_iteration
-            )
-            dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(n, drop_remainder=True)
-
-        labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
-
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
+    # def make_labels_dataset(self, n: int, k: int, k_validation: int, one_hot_labels: bool) -> tf.data.Dataset:
+    #     """Creates a tf.data.Dataset which generates corresponding labels to meta-learning inputs.
+    #     This method just creates this dataset for one task and repeats it. You can use zip to combine this dataset
+    #     with your desired dataset.
+    #     Note that the repeat is set to -1 so that the dataset will repeat itself. This will allow us to
+    #     zip it with any other dataset and it will generate labels as much as needed.
+    #     Also notice that this dataset is not batched into meta batch size, so this will just generate labels for one
+    #     task."""
+    #     tr_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k), 0))
+    #     val_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k_validation), 0))
+    #
+    #     if one_hot_labels:
+    #         tr_labels_ds = tr_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
+    #         val_labels_ds = val_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
+    #
+    #     labels_dataset = tf.data.Dataset.zip((tr_labels_ds, val_labels_ds))
+    #     labels_dataset = labels_dataset.repeat(-1)
+    #
+    #     return labels_dataset
+    #
+    # def get_supervised_meta_learning_dataset(
+    #         self,
+    #         folders: List[str],
+    #         n: int,
+    #         k: int,
+    #         k_validation: int,
+    #         meta_batch_size: int,
+    #         one_hot_labels: bool = True,
+    #         reshuffle_each_iteration: bool = True,
+    #         seed: int = -1,
+    #         dtype=tf.float32, #  The input dtype
+    # ) -> tf.data.Dataset:
+    #     """Folders can be a dictionary and also real name of folders.
+    #     If it is a dictionary then each item is the class name and the corresponding values are the file addressses
+    #     of images of that class."""
+    #     if seed != -1:
+    #         np.random.seed(seed)
+    #
+    #     def _get_instances(class_dir_address):
+    #         def get_instances(class_dir_address):
+    #             class_dir_address = class_dir_address.numpy().decode('utf-8')
+    #             instance_names = folders[class_dir_address]
+    #             # instance_names = [
+    #             #     os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
+    #             # ]
+    #             instances = np.random.choice(instance_names, size=k + k_validation, replace=False)
+    #             return instances[:k], instances[k:k + k_validation]
+    #
+    #         return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
+    #
+    #     if seed != -1:
+    #         parallel_iterations = 1
+    #     else:
+    #         parallel_iterations = None
+    #
+    #     def parse_function(tr_imgs_addresses, val_imgs_addresses):
+    #         tr_imgs = tf.map_fn(
+    #             self._get_parse_function(),
+    #             tr_imgs_addresses,
+    #             dtype=dtype,
+    #             parallel_iterations=parallel_iterations
+    #         )
+    #         val_imgs = tf.map_fn(
+    #             self._get_parse_function(),
+    #             val_imgs_addresses,
+    #             dtype=dtype,
+    #             parallel_iterations=parallel_iterations
+    #         )
+    #
+    #         return tf.stack(tr_imgs), tf.stack(val_imgs)
+    #
+    #     if type(folders) == list:
+    #         classes = dict()
+    #         for folder in folders:
+    #             instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
+    #             classes[folder] = instances
+    #         folders = classes
+    #
+    #     keep_keys_with_greater_than_equal_k_items(folders, k + k_validation)
+    #     # folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
+    #     steps_per_epoch = len(folders.keys()) // (n * meta_batch_size)
+    #
+    #     dataset = tf.data.Dataset.from_tensor_slices(sorted(list(folders.keys())))
+    #     if seed != -1:
+    #         dataset = dataset.shuffle(
+    #             buffer_size=len(folders.keys()),
+    #             reshuffle_each_iteration=reshuffle_each_iteration,
+    #             seed=seed
+    #         )
+    #         # When using a seed the map should be done in the same order so no parallel execution
+    #         dataset = dataset.map(_get_instances, num_parallel_calls=1)
+    #     else:
+    #         dataset = dataset.shuffle(
+    #             buffer_size=len(folders.keys()),
+    #             reshuffle_each_iteration=reshuffle_each_iteration
+    #         )
+    #         dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    #
+    #     dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    #     dataset = dataset.batch(n, drop_remainder=True)
+    #
+    #     labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
+    #
+    #     dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+    #     dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+    #
+    #     setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+    #     return dataset
 
     def get_meta_learning_dataset_from_clusters(
             self,
@@ -733,10 +733,16 @@ class CelebADatabase(Database):
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             # For face recognition ablation study uncomment this line
-            # image = tf.image.resize(image, (84, 84))
+
+            # for face net uncomment this line
+            # image = tf.image.resize(image, (160, 160))
+            #
+            # image = tf.cast(image, tf.float32)
+            # return (image - 127.5) / 128.0
+
+            # The true parse function
             image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
-
             return image / 255.
 
         return parse_function
@@ -782,7 +788,7 @@ class LFWDatabase(Database):
     def __init__(self, input_shape=(84, 84, 3)):
         super(LFWDatabase, self).__init__(
             settings.LFW_RAW_DATA_ADDRESS,
-            os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/lfw/'),
+            settings.LFW_RAW_DATA_ADDRESS,
             random_seed=-1,
             input_shape=input_shape
         )
@@ -798,9 +804,18 @@ class LFWDatabase(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            # For face recognition ablation study uncomment this line
+            # image = tf.image.resize(image, (84, 84))
+
+            # for face net uncomment this line
+            # image = tf.image.resize(image, (160, 160))
+            # image = tf.cast(image, tf.float32)
+            # return (image - 127.5) / 128.0
+
+            # The true parse function
             image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
-
+            # return image / 127.5 - 1
             return image / 255.
 
         return parse_function
@@ -814,6 +829,7 @@ class VGGFace2Database(Database):
             random_seed=-1,
             input_shape=input_shape
         )
+        self.input_shape = (160, 160, 3)
 
     def get_train_val_test_folders(self) -> Tuple[List[str], List[str], List[str]]:
         # TODO fix this
@@ -836,10 +852,19 @@ class VGGFace2Database(Database):
     def _get_parse_function(self) -> Callable:
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            # For face recognition ablation study uncomment this line
+            # image = tf.image.resize(image, (84, 84))
+
+            # for face net uncomment this line
+            # image = tf.image.resize(image, (160, 160))
+            #
+            # image = tf.cast(image, tf.float32)
+            # return (image - 127.5) / 128.0
+
+            # The true parse function
             image = tf.image.resize(image, self.get_input_shape()[:2])
             image = tf.cast(image, tf.float32)
-
-            return image / 255.
+            return image / 127.5 - 1
 
         return parse_function
 
