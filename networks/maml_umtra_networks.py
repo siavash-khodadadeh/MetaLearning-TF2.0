@@ -218,4 +218,5 @@ def get_transfer_net(architecture='VGG16', num_classes=10, num_hidden_units=None
             last_layer = hidden_layers[-1]
     fc_out = tf.keras.layers.Dense(num_classes, name='fc_out', activation=None)(last_layer)
     model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc_out], name='TransferNet')
+
     return model
