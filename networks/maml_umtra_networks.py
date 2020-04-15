@@ -194,7 +194,7 @@ class VGG19Model(tf.keras.models.Model):
 
 
 @name_repr('TransferNet')
-def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
+def get_transfer_net(architecture='VGG16', num_classes=10, num_hidden_units=None, transfer=True):
     if transfer:
         base_model = getattr(tf.keras.applications, architecture)(
             include_top=False,
@@ -210,10 +210,13 @@ def get_transfer_net(architecture='VGG16', num_classes=10, transfer=True):
             input_shape=(224, 224, 3)
         )
 
-    flatten = tf.keras.layers.Flatten(name='flatten')(base_model.output)
-    fc1 = tf.keras.layers.Dense(512, name='fc1', activation='relu')(flatten)
-    fc2 = tf.keras.layers.Dense(512, name='fc2', activation='relu')(fc1)
-    fc3 = tf.keras.layers.Dense(num_classes, name='fc3', activation=None)(fc2)
+    last_layer = tf.keras.layers.Flatten(name='flatten')(base_model.output)
+    if num_hidden_units:
+        hidden_layers = []
+        for i, n in enumerate(num_hidden_units):
+            hidden_layers.append(tf.keras.layers.Dense(n, name='fc_' + str(i + 1), activation='relu')(last_layer))
+            last_layer = hidden_layers[-1]
+    fc_out = tf.keras.layers.Dense(num_classes, name='fc_out', activation=None)(last_layer)
+    model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc_out], name='TransferNet')
 
-    model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc3], name='TransferNet')
     return model
