@@ -319,55 +319,6 @@ class Database(ABC):
     #     setattr(dataset, 'steps_per_epoch', steps_per_epoch)
     #     return dataset
 
-    def get_meta_learning_dataset_from_clusters(
-            self,
-            clusters_dir,
-            n,
-            k,
-            k_val,
-            meta_batch_size,
-            one_hot_labels=True,
-            reshuffle_each_iteration=True,
-    ):
-        def _get_instances(cluster_id_file_address):
-            cluster_instances = tf.strings.split(tf.io.read_file(cluster_id_file_address), '\n')[:-1]
-
-            def get_instances(ci):
-                instances = np.random.choice(ci, size=k + k_val, replace=False)
-                return instances[:k], instances[k:k + k_val]
-
-            return tf.py_function(get_instances, inp=[cluster_instances], Tout=[tf.string, tf.string])
-
-        def parse_function(tr_imgs_addresses, val_imgs_addresses):
-            tr_imgs = tf.map_fn(self._get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
-            val_imgs = tf.map_fn(self._get_parse_function(), val_imgs_addresses, dtype=tf.float32)
-
-            return tf.stack(tr_imgs), tf.stack(val_imgs)
-
-        classes = sorted([os.path.join(clusters_dir, file_address) for file_address in os.listdir(clusters_dir)])
-        final_classes = list()
-
-        for class_name in classes:
-            if len(open(class_name).readlines()) >= k + k_val:
-                final_classes.append(class_name)
-
-        classes = final_classes
-        steps_per_epoch = len(classes) // n // meta_batch_size
-
-        dataset = tf.data.Dataset.from_tensor_slices(classes)
-        dataset = dataset.shuffle(buffer_size=len(classes), reshuffle_each_iteration=reshuffle_each_iteration)
-        dataset = dataset.map(_get_instances,  num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(n, drop_remainder=True)
-
-        labels_dataset = self.make_labels_dataset(n, k, k_val, one_hot_labels)
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
-
     def get_abstract_learning_dataset(
             self,
             folders,

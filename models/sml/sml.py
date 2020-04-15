@@ -36,9 +36,12 @@ class SML(ModelAgnosticMetaLearningModel):
             feature_size,
             input_shape,
             preprocess_function=None,
-            least_number_of_tasks_val_test=-1,  # Make sure the val and test dataset pick at least this many tasks.
+            number_of_tasks_val=-1,  # Make sure the val and test dataset pick at least this many tasks.
+            number_of_tasks_test=-1,
             clip_gradients=False,
             experiment_name=None,
+            val_seed=-1,
+            val_test_batch_norm_momentum=0.0
     ):
         super(SML, self).__init__(
             database=database,
@@ -57,9 +60,12 @@ class SML(ModelAgnosticMetaLearningModel):
             meta_learning_rate=meta_learning_rate,
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
-            least_number_of_tasks_val_test=least_number_of_tasks_val_test,
+            number_of_tasks_val=number_of_tasks_val,
+            number_of_tasks_test=number_of_tasks_test,
             clip_gradients=clip_gradients,
-            experiment_name=experiment_name
+            experiment_name=experiment_name,
+            val_seed=val_seed,
+            val_test_batch_norm_momentum=val_test_batch_norm_momentum
         )
         self.features_model = feature_model
         self.n_clusters = n_clusters
@@ -108,6 +114,55 @@ class SML(ModelAgnosticMetaLearningModel):
             np.save(features_address, features)
         return features, all_files
 
+    def get_meta_learning_dataset_from_clusters(
+            self,
+            clusters_dir,
+            n,
+            k,
+            k_val,
+            meta_batch_size,
+            one_hot_labels=True,
+            reshuffle_each_iteration=True,
+    ):
+        def _get_instances(cluster_id_file_address):
+            cluster_instances = tf.strings.split(tf.io.read_file(cluster_id_file_address), '\n')[:-1]
+
+            def get_instances(ci):
+                instances = np.random.choice(ci, size=k + k_val, replace=False)
+                return instances[:k], instances[k:k + k_val]
+
+            return tf.py_function(get_instances, inp=[cluster_instances], Tout=[tf.string, tf.string])
+
+        def parse_function(tr_imgs_addresses, val_imgs_addresses):
+            tr_imgs = tf.map_fn(self.get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
+            val_imgs = tf.map_fn(self.get_parse_function(), val_imgs_addresses, dtype=tf.float32)
+
+            return tf.stack(tr_imgs), tf.stack(val_imgs)
+
+        classes = sorted([os.path.join(clusters_dir, file_address) for file_address in os.listdir(clusters_dir)])
+        final_classes = list()
+
+        for class_name in classes:
+            if len(open(class_name).readlines()) >= k + k_val:
+                final_classes.append(class_name)
+
+        classes = final_classes
+        steps_per_epoch = len(classes) // n // meta_batch_size
+
+        dataset = tf.data.Dataset.from_tensor_slices(classes)
+        dataset = dataset.shuffle(buffer_size=len(classes), reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.map(_get_instances,  num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.batch(n, drop_remainder=True)
+
+        labels_dataset = self.make_labels_dataset(n, k, k_val, one_hot_labels)
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
+        return dataset
+
     def get_train_dataset(self):
         clusters_files_dir = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'clusters')
         if not os.path.exists(clusters_files_dir):
@@ -141,7 +196,7 @@ class SML(ModelAgnosticMetaLearningModel):
                         cluster_file.write(cluster_instance)
                         cluster_file.write('\n')
 
-        tr_dataset = self.database.get_meta_learning_dataset_from_clusters(
+        tr_dataset = self.get_meta_learning_dataset_from_clusters(
             clusters_dir=clusters_files_dir,
             n=self.n,
             k=self.k,
@@ -498,7 +553,7 @@ def run_celeba():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
+        k_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -512,16 +567,18 @@ def run_celeba():
         input_shape=(224, 224, 3),
         preprocess_function=tf.keras.applications.vgg19.preprocess_input,
         log_train_images_after_iteration=1000,
-        least_number_of_tasks_val_test=1000,
+        number_of_tasks_val=100,
+        number_of_tasks_test=1000,
+        clip_gradients=True,
         report_validation_frequency=250,
         experiment_name='celeba_imagenet_features'
     )
-    # sml.train(iterations=60000)
+    sml.train(iterations=60000)
     sml.evaluate(iterations=50, seed=42)
 
 
 if __name__ == '__main__':
     # run_omniglot()
-    run_mini_imagenet()
-    # run_celeba()
+    # run_mini_imagenet()
+    run_celeba()
 

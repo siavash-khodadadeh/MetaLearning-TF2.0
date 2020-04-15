@@ -105,6 +105,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
     def create_meta_model(self, updated_model, model, gradients, assign=False):
         k = 0
         variables = list()
+        # TODO Maybe get layers by name
 
         for i in range(len(model.layers)):
             if model.layers[i].trainable:
@@ -213,43 +214,44 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 training=kwargs['use_val_batch_statistics']
             )
 
+    @tf.function
+    def _initialize_eval_model(self):
+        gradients = list()
+        for variable in self.model.trainable_variables:
+            gradients.append(tf.zeros_like(variable))
+        self.create_meta_model(self.eval_model, self.model, gradients, assign=True)
+
+    @tf.function
+    def _train_model_for_eval(self, train_ds, train_labels):
+        with tf.GradientTape(persistent=False) as train_tape:
+            train_tape.watch(self.eval_model.meta_trainable_variables)
+            logits = self.eval_model(train_ds, training=True)
+            loss = self.inner_loss(train_labels, logits)
+            tf.print(loss)
+        gradients = train_tape.gradient(loss, self.eval_model.meta_trainable_variables)
+        self.create_meta_model(self.eval_model, self.eval_model, gradients, assign=True)
+
+    @tf.function
+    def _evaluate_model_for_eval(self, val_ds, val_labels, training):
+        updated_model_logits = self.eval_model(val_ds, training=training)
+        val_loss = self.outer_loss(val_labels, updated_model_logits)
+
+        predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
+        real_labels = self.convert_labels_to_real_labels(val_labels)
+
+        val_acc = tf.reduce_mean(tf.cast(tf.equal(predicted_class_labels, real_labels), tf.float32))
+        return val_acc, val_loss
+
     def get_losses_of_tasks_batch_eval(self, iterations, training):
-        @tf.function
-        def initialize_eval_model():
-            gradients = list()
-            for variable in self.model.trainable_variables:
-                gradients.append(tf.zeros_like(variable))
-            self.create_meta_model(self.eval_model, self.model, gradients, assign=True)
-
-        @tf.function
-        def train_model(train_ds, train_labels):
-            with tf.GradientTape(persistent=False) as train_tape:
-                train_tape.watch(self.eval_model.meta_trainable_variables)
-                logits = self.eval_model(train_ds, training=True)
-                loss = self.inner_loss(train_labels, logits)
-            gradients = train_tape.gradient(loss, self.eval_model.meta_trainable_variables)
-            self.create_meta_model(self.eval_model, self.eval_model, gradients, assign=True)
-
-        @tf.function
-        def evaluate_model(val_ds, val_labels):
-            updated_model_logits = self.eval_model(val_ds, training=training)
-            val_loss = self.outer_loss(val_labels, updated_model_logits)
-
-            predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
-            real_labels = self.convert_labels_to_real_labels(val_labels)
-
-            val_acc = tf.reduce_mean(tf.cast(tf.equal(predicted_class_labels, real_labels), tf.float32))
-            return val_acc, val_loss
-
         def f(inputs):
             train_ds, val_ds, train_labels, val_labels = inputs
             train_ds = combine_first_two_axes(train_ds)
             val_ds = combine_first_two_axes(val_ds)
 
-            initialize_eval_model()
+            self._initialize_eval_model()
             for i in range(iterations):
-                train_model(train_ds, train_labels)
-            val_acc, val_loss = evaluate_model(val_ds, val_labels)
+                self._train_model_for_eval(train_ds, train_labels)
+            val_acc, val_loss = self._evaluate_model_for_eval(val_ds, val_labels, training)
 
             return val_acc, val_loss
         return f
