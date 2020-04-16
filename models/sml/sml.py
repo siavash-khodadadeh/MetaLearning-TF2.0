@@ -164,7 +164,9 @@ class SML(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_train_dataset(self):
-        clusters_files_dir = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'clusters')
+        clusters_files_dir = os.path.join(
+            self.get_root(), f'cache/{self.experiment_name}', f'clusters_{self.n_clusters}'
+        )
         if not os.path.exists(clusters_files_dir):
             features, all_files = self.get_features(
                 dir_name=os.path.join(self.get_root(), f'cache/{self.experiment_name}')
@@ -553,14 +555,14 @@ def run_celeba():
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=15,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_iterations=15000,
         meta_learning_rate=0.001,
-        n_clusters=500,
+        n_clusters=5000,
         feature_model=feature_model,
         # feature_size=288,
         feature_size=4096,

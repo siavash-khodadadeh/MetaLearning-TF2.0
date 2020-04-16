@@ -227,7 +227,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             train_tape.watch(self.eval_model.meta_trainable_variables)
             logits = self.eval_model(train_ds, training=True)
             loss = self.inner_loss(train_labels, logits)
-            tf.print(loss)
+            # tf.print(loss)
         gradients = train_tape.gradient(loss, self.eval_model.meta_trainable_variables)
         self.create_meta_model(self.eval_model, self.eval_model, gradients, assign=True)
 
@@ -252,7 +252,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             for i in range(iterations):
                 self._train_model_for_eval(train_ds, train_labels)
             val_acc, val_loss = self._evaluate_model_for_eval(val_ds, val_labels, training)
-
+            # tf.print()
+            # tf.print(val_loss)
+            # tf.print(val_acc)
+            # tf.print()
             return val_acc, val_loss
         return f
 
@@ -283,14 +286,3 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
     def predict_class_labels_from_logits(self, logits):
         return tf.argmax(logits, axis=-1)
-
-
-
-
-if __name__ == '__main__':
-    # tf.config.set_visible_devices([], 'GPU')
-    # print(tf.__version__)
-    # run_omniglot()
-    # run_mini_imagenet()
-    run_celeba()
-    # run_isic()
