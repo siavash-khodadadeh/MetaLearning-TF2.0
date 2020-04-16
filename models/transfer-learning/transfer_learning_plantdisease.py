@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from decorators import name_repr
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from tf_datasets import ISICDatabase
+from tf_datasets import PlantDiseaseDatabase
 
 
 @name_repr('VGG16')
@@ -60,9 +60,9 @@ class TransferLearning(ModelAgnosticMetaLearningModel):
 
 
 def run_transfer_learning():
-    isic_database = ISICDatabase()
+    plantdisease = PlantDiseaseDatabase()
     transfer_learning = TransferLearning(
-        database=isic_database,
+        database=plantdisease,
         network_cls=get_network,
         n=5,
         k=1,
@@ -81,7 +81,7 @@ def run_transfer_learning():
         number_of_tasks_val=100,
         number_of_tasks_test=100,
         clip_gradients=True,
-        experiment_name='fixed_vgg_16_isic',
+        experiment_name='fixed_vgg_16_plant_disease',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
         random_layer_initialization_seed=42,
