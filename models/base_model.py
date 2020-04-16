@@ -77,9 +77,7 @@ class BaseModel(metaclass=SetupCaller):
         For example, num_steps in ml is in get_config_info(), however, it is not set in __init__ of the base model
         because it is a field for maml."""
         self.train_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/train/')
-        self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
         self.val_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/val/')
-        self.val_summary_writer = tf.summary.create_file_writer(self.val_log_dir)
         self.checkpoint_dir = os.path.join(self._root, self.get_config_info(), 'saved_models/')
 
     def get_root(self):
@@ -189,6 +187,8 @@ class BaseModel(metaclass=SetupCaller):
         return test_dataset
 
     def train(self, iterations=5):
+        self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
+        self.val_summary_writer = tf.summary.create_file_writer(self.val_log_dir)
         self.train_dataset = self.get_train_dataset()
         iteration_count = self.load_model()
         epoch_count = iteration_count // self.train_dataset.steps_per_epoch
