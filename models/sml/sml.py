@@ -174,7 +174,11 @@ class SML(ModelAgnosticMetaLearningModel):
                 dir_name=os.path.join(self.get_root(), f'cache/{self.experiment_name}')
             )
 
-            k_means_path = os.path.join(self.get_root(), f'cache/{self.experiment_name}', 'k_means.pkl')
+            k_means_path = os.path.join(
+                self.get_root(),
+                f'cache/{self.experiment_name}',
+                f'k_means_{self.n_clusters}.pkl'
+            )
             if os.path.exists(k_means_path):
                 k_means = pickle.load(open(k_means_path, 'rb'))
                 cluster_ids = k_means.predict(features)
