@@ -76,6 +76,7 @@ class SML(ModelAgnosticMetaLearningModel):
     def get_config_str(self):
         config_str = super(SML, self).get_config_str()
         config_str += f'_clusters_{self.n_clusters}'
+        return config_str
 
     def get_features(self, dir_name=None):
         files_names_address = os.path.join(dir_name, 'file_names.npy')
