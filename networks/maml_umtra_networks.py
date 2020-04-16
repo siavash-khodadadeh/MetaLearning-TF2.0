@@ -194,7 +194,7 @@ class VGG19Model(tf.keras.models.Model):
 
 
 @name_repr('TransferNet')
-def get_transfer_net(architecture='VGG16', num_classes=10, num_hidden_units=None, transfer=True):
+def get_transfer_net(architecture='VGG16', num_classes=10, num_hidden_units=None, num_trainable_layers=3, transfer=True):
     if transfer:
         base_model = getattr(tf.keras.applications, architecture)(
             include_top=False,
@@ -202,6 +202,14 @@ def get_transfer_net(architecture='VGG16', num_classes=10, num_hidden_units=None
             input_shape=(224, 224, 3),
         )
         base_model.trainable = False
+        counter = 1
+        for layer in reversed(base_model.layers):
+            if counter == num_trainable_layers:
+                break
+            else:
+                layer.trainable = True
+            if isinstance(layer, tf.keras.layers.Dense) or isinstance(layer, tf.keras.layers.Conv2D):
+                counter += 1
     else:
         base_model = getattr(
             tf.keras.applications, architecture)(
@@ -218,5 +226,4 @@ def get_transfer_net(architecture='VGG16', num_classes=10, num_hidden_units=None
             last_layer = hidden_layers[-1]
     fc_out = tf.keras.layers.Dense(num_classes, name='fc_out', activation=None)(last_layer)
     model = tf.keras.models.Model(inputs=[base_model.input], outputs=[fc_out], name='TransferNet')
-
     return model
