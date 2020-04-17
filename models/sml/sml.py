@@ -190,7 +190,7 @@ class SML(ModelAgnosticMetaLearningModel):
                     n_init=1,  # It does not take forever in case of celeba
                     max_iter=3000,
                     precompute_distances=True,
-                    n_jobs=1,
+                    n_jobs=32,
                     verbose=2
                 )
                 cluster_ids = k_means.fit_predict(features)

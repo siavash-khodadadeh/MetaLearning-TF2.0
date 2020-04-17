@@ -46,6 +46,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         clip_gradients=False,
         experiment_name=None,
         val_test_batch_norm_momentum=0.0,
+        val_database=None,
+        target_database=None,
     ):
         super(ModelAgnosticMetaLearningModel, self).__init__(
             database=database,
@@ -65,6 +67,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             number_of_tasks_test=number_of_tasks_test,
             val_seed=val_seed,
             experiment_name=experiment_name,
+            val_database=val_database,
+            target_database=target_database
         )
 
         self.num_steps_ml = num_steps_ml
@@ -88,8 +92,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         model(tf.zeros(shape=(1, *self.database.input_shape)))
         return model
 
+    def get_network_name(self):
+        if self.network_cls is not None:
+            return self.network_cls.name
+        raise Exception('Model name is not defined. Please override get_network_name function.')
+
     def get_config_str(self):
-        config_str = f'model-{self.network_cls.name}_' \
+        config_str = f'model-{self.get_network_name()}_' \
                f'mbs-{self.meta_batch_size}_' \
                f'n-{self.n}_' \
                f'k-{self.k}_' \
@@ -252,10 +261,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             for i in range(iterations):
                 self._train_model_for_eval(train_ds, train_labels)
             val_acc, val_loss = self._evaluate_model_for_eval(val_ds, val_labels, training)
-            # tf.print()
-            # tf.print(val_loss)
-            # tf.print(val_acc)
-            # tf.print()
+            tf.print()
+            tf.print(val_loss)
+            tf.print(val_acc)
+            tf.print()
             return val_acc, val_loss
         return f
 

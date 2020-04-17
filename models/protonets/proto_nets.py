@@ -26,7 +26,9 @@ class PrototypicalNetworks(BaseModel):
             number_of_tasks_val=-1,
             number_of_tasks_test=-1,
             val_seed=-1,
-            experiment_name=None
+            experiment_name=None,
+            val_database=None,
+            target_database=None
     ):
 
         super(PrototypicalNetworks, self).__init__(
@@ -47,6 +49,8 @@ class PrototypicalNetworks(BaseModel):
             number_of_tasks_test=number_of_tasks_test,
             val_seed=val_seed,
             experiment_name=experiment_name,
+            val_database=val_database,
+            target_database=target_database
         )
 
     def get_config_str(self):

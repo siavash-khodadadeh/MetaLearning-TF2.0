@@ -56,19 +56,19 @@ class PlantDiseaseDatabasePreProcess(PlantDiseaseDatabase):
         return parse_function
 
 def run_cross_domain():
-    mini_imagenet_database = MiniImagenetDatabasePreProcess(input_shape=(224, 224, 3))
+    # mini_imagenet_database = MiniImagenetDatabasePreProcess(input_shape=(224, 224, 3))
     transfer_learning = TransferLearning(
-        database=EuroSatDatabasePreProcess(input_shape=(224, 224, 3)),
-#         database=PlantDiseaseDatabasePreProcess(input_shape=(224, 224, 3)),
-#         database=mini_imagenet_database,
-#         database=ISICDatabasePreProcess(input_shape=(224, 224, 3)),
+        # database=EuroSatDatabasePreProcess(input_shape=(224, 224, 3)),
+        database=PlantDiseaseDatabasePreProcess(input_shape=(224, 224, 3)),
+        # database=mini_imagenet_database,
+        # database=ISICDatabasePreProcess(input_shape=(224, 224, 3)),
         network_cls=get_transfer_net,
         n=5,
         k=1,
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=50,
+        k_test=5,
         meta_batch_size=1,
         num_steps_ml=1,
         lr_inner_ml=0.01,
@@ -80,7 +80,7 @@ def run_cross_domain():
         number_of_tasks_val=100,
         number_of_tasks_test=100,
         clip_gradients=True,
-        experiment_name='mini_imagenet',
+        experiment_name='plandisease',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
