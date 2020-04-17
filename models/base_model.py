@@ -37,8 +37,15 @@ class BaseModel(metaclass=SetupCaller):
         number_of_tasks_test,
         val_seed,  # The seed for validation dataset. -1 means change the samples for each report.
         experiment_name=None,
+        val_database=None,
+        target_database=None
     ):
         self.database = database
+        if val_database is None:
+            self.val_database = val_database
+        if target_database is None:
+            self.target_database = self.database
+
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
@@ -160,7 +167,7 @@ class BaseModel(metaclass=SetupCaller):
 
     def get_val_dataset(self):
         val_dataset = self.get_supervised_meta_learning_dataset(
-            self.database.val_folders,
+            self.val_database.val_folders,
             n=self.n,
             k=self.k,
             k_validation=self.k_val_val,
@@ -174,7 +181,7 @@ class BaseModel(metaclass=SetupCaller):
 
     def get_test_dataset(self, seed=-1):
         test_dataset = self.get_supervised_meta_learning_dataset(
-            self.database.test_folders,
+            self.target_database.test_folders,
             n=self.n,
             k=self.k_test,
             k_validation=self.k_val_test,
