@@ -173,6 +173,7 @@ class SML(ModelAgnosticMetaLearningModel):
             features, all_files = self.get_features(
                 dir_name=os.path.join(self.get_root(), f'cache/{self.experiment_name}')
             )
+            print('Feature vectors are loaded.')
 
             k_means_path = os.path.join(
                 self.get_root(),
@@ -183,8 +184,15 @@ class SML(ModelAgnosticMetaLearningModel):
                 k_means = pickle.load(open(k_means_path, 'rb'))
                 cluster_ids = k_means.predict(features)
             else:
-                k_means = KMeans(n_clusters=self.n_clusters)
-                # k_means = KMeans(n_clusters=self.n_clusters, n_init=1, max_iter=3000)
+                # k_means = KMeans(n_clusters=self.n_clusters)
+                k_means = KMeans(
+                    n_clusters=self.n_clusters,
+                    n_init=1,  # It does not take forever in case of celeba
+                    max_iter=3000,
+                    precompute_distances=True,
+                    n_jobs=1,
+                    verbose=2
+                )
                 cluster_ids = k_means.fit_predict(features)
                 with open(k_means_path, 'wb') as f:
                     pickle.dump(k_means, f)
