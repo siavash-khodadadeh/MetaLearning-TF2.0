@@ -41,10 +41,8 @@ class BaseModel(metaclass=SetupCaller):
         target_database=None
     ):
         self.database = database
-        if val_database is None:
-            self.val_database = val_database
-        if target_database is None:
-            self.target_database = self.database
+        self.val_database = val_database if val_database is not None else self.database
+        self.target_database = target_database if target_database is not None else self.database
 
         self.train_dataset = None
         self.val_dataset = None
