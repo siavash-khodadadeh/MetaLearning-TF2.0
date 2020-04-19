@@ -189,6 +189,7 @@ class SML(ModelAgnosticMetaLearningModel):
                 features = pca.fit_transform(features)
                 row_sums = np.linalg.norm(features, axis=1)
                 features = features / row_sums[:, np.newaxis]
+                print('PCA Finished.')
                 # k_means = KMeans(n_clusters=self.n_clusters)
                 k_means = KMeans(
                     n_clusters=self.n_clusters,
@@ -201,6 +202,7 @@ class SML(ModelAgnosticMetaLearningModel):
                 cluster_ids = k_means.fit_predict(features)
                 with open(k_means_path, 'wb') as f:
                     pickle.dump(k_means, f)
+                print('K-means finished.')
 
             clusters = dict()
             for i, file_address in enumerate(all_files):
@@ -560,46 +562,4 @@ def run_mini_imagenet():
     sml.train(iterations=60000)
     # sml.evaluate(iterations=50, seed=14)
 
-
-def run_celeba():
-    celeba_database = CelebADatabase()
-    base_model = tf.keras.applications.VGG19(weights='imagenet')
-    feature_model = tf.keras.models.Model(inputs=base_model.input, outputs=base_model.layers[24].output)
-
-    sml = SML(
-        database=celeba_database,
-        network_cls=MiniImagenetModel,
-        n=5,
-        k=1,
-        k_val_ml=5,
-        k_val_val=15,
-        k_val_test=15,
-        k_test=1,
-        meta_batch_size=4,
-        num_steps_ml=5,
-        lr_inner_ml=0.05,
-        num_steps_validation=5,
-        save_after_iterations=15000,
-        meta_learning_rate=0.001,
-        n_clusters=6000,
-        feature_model=feature_model,
-        # feature_size=288,
-        feature_size=4096,
-        input_shape=(224, 224, 3),
-        preprocess_function=tf.keras.applications.vgg19.preprocess_input,
-        log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
-        clip_gradients=True,
-        report_validation_frequency=250,
-        experiment_name='celeba_imagenet_features'
-    )
-    sml.train(iterations=60000)
-    sml.evaluate(iterations=50, seed=42)
-
-
-if __name__ == '__main__':
-    # run_omniglot()
-    # run_mini_imagenet()
-    run_celeba()
 
