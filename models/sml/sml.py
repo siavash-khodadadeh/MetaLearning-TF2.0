@@ -4,6 +4,7 @@ import pickle
 import tensorflow as tf
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
@@ -184,6 +185,10 @@ class SML(ModelAgnosticMetaLearningModel):
                 k_means = pickle.load(open(k_means_path, 'rb'))
                 cluster_ids = k_means.predict(features)
             else:
+                pca = PCA(n_components=256, whiten=True)
+                features = pca.fit_transform(features)
+                row_sums = np.linalg.norm(features, axis=1)
+                features = features / row_sums[:, np.newaxis]
                 # k_means = KMeans(n_clusters=self.n_clusters)
                 k_means = KMeans(
                     n_clusters=self.n_clusters,
@@ -576,7 +581,7 @@ def run_celeba():
         num_steps_validation=5,
         save_after_iterations=15000,
         meta_learning_rate=0.001,
-        n_clusters=5000,
+        n_clusters=6000,
         feature_model=feature_model,
         # feature_size=288,
         feature_size=4096,
