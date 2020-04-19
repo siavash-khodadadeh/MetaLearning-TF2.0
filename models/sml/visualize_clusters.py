@@ -6,8 +6,8 @@ from PIL import Image
 
 
 # experiment_name = 'mini_imagenet_learn_miniimagent_features'
-experiment_name = 'mini_imagenet_imagenet_features'
-clusters_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'models/sml/cache/', experiment_name, 'clusters')
+experiment_name = 'celeba_imagenet_features'
+clusters_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'models/sml/cache/', experiment_name, 'clusters_5000')
 
 
 for cluster_file in sorted([os.path.join(clusters_address, f) for f in os.listdir(clusters_address)]):
