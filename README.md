@@ -142,3 +142,16 @@ Direct: command line kaggle datasets download -d nih-chest-xrays/data
 
 Download the data.zip and put it in a folder (for example names ChestX-Ray8) and unzip 
 it after copying it in that folder. Then set the variable for RAW_DATASET_ADDRESS
+
+### Meta-Dataset
+Go to https://github.com/google-research/meta-dataset
+
+Download all the datasets based on the instructions provided in the above repository.
+Do not run the converting script. This repository will convert the downloaded file
+based on our need.
+Then after extracting the download files set the variables to the address of 
+extracted files.
+
+* CUB_RAW_DATASEST_ADDRESS
+* AIRCRAFT_RAW_DATASET_ADDRESS
+

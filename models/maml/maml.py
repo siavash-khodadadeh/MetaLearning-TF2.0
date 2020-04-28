@@ -1,13 +1,7 @@
-import os
-
 import tensorflow as tf
-import numpy as np
 
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, VGGFace2Database, \
-    ISICDatabase, EuroSatDatabase, PlantDiseaseDatabase, ChestXRay8Database
-from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model, VGGSmallModel
 from models.base_model import BaseModel
-from utils import combine_first_two_axes, average_gradients
+from utils import combine_first_two_axes
 import settings
 
 
@@ -236,7 +230,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             train_tape.watch(self.eval_model.meta_trainable_variables)
             logits = self.eval_model(train_ds, training=True)
             loss = self.inner_loss(train_labels, logits)
-            # tf.print(loss)
+            if settings.DEBUG:
+                tf.print(loss)
         gradients = train_tape.gradient(loss, self.eval_model.meta_trainable_variables)
         self.create_meta_model(self.eval_model, self.eval_model, gradients, assign=True)
 
@@ -261,10 +256,11 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             for i in range(iterations):
                 self._train_model_for_eval(train_ds, train_labels)
             val_acc, val_loss = self._evaluate_model_for_eval(val_ds, val_labels, training)
-            tf.print()
-            tf.print(val_loss)
-            tf.print(val_acc)
-            tf.print()
+            if settings.DEBUG:
+                tf.print()
+                tf.print(val_loss)
+                tf.print(val_acc)
+                tf.print()
             return val_acc, val_loss
         return f
 

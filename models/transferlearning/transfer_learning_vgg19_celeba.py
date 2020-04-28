@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from decorators import name_repr
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from tf_datasets import CelebADatabase
+from databases import CelebADatabase
 
 
 @name_repr('VGG16')

@@ -1,13 +1,12 @@
 import os
 import unittest
-import copy
 from unittest.mock import patch
 from collections import deque
 
 import tensorflow as tf
 
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, EuroSatDatabase, \
-    ISICDatabase, ChestXRay8Database, PlantDiseaseDatabase
+from databases import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase, LFWDatabase, EuroSatDatabase, \
+    ISICDatabase, ChestXRay8Database
 from utils import combine_first_two_axes
 
 
