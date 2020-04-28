@@ -1,6 +1,6 @@
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import SimpleModel
-from tf_datasets import OmniglotDatabase
+from databases import OmniglotDatabase
 
 
 def run_omniglot():

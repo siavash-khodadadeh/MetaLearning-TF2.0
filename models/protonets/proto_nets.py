@@ -1,9 +1,8 @@
 import tensorflow as tf
-import numpy as np
 
 from models.base_model import BaseModel
 from networks.proto_networks import SimpleModelProto, VGGSmallModel
-from tf_datasets import OmniglotDatabase, VGGFace2Database
+from databases import OmniglotDatabase, VGGFace2Database
 from utils import combine_first_two_axes
 
 
@@ -153,8 +152,6 @@ def run_omniglot():
 
 
 def run_celeba():
-    from models.protonets.inception_resnet_v1 import InceptionResNetV1
-
     celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
     # celeba_database = LFWDatabase(input_shape=(224, 224, 3))

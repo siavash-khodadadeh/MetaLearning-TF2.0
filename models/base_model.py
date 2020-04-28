@@ -404,13 +404,24 @@ class BaseModel(metaclass=SetupCaller):
             one_hot_labels: bool = True,
             reshuffle_each_iteration: bool = True,
             seed: int = -1,
-            dtype=tf.float32, #  The input dtype
+            dtype=tf.float32,  # The input dtype
+            instance_parse_function=None
     ) -> tf.data.Dataset:
         """Folders can be a dictionary and also real name of folders.
         If it is a dictionary then each item is the class name and the corresponding values are the file addressses
         of images of that class."""
+        if instance_parse_function is None:
+            instance_parse_function = self.get_parse_function()
+
         if seed != -1:
             np.random.seed(seed)
+
+        if type(folders) == list:
+            classes = dict()
+            for folder in folders:
+                instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
+                classes[folder] = instances
+            folders = classes
 
         def _get_instances(class_dir_address):
             def get_instances(class_dir_address):
@@ -431,26 +442,19 @@ class BaseModel(metaclass=SetupCaller):
 
         def parse_function(tr_imgs_addresses, val_imgs_addresses):
             tr_imgs = tf.map_fn(
-                self.get_parse_function(),
+                instance_parse_function,
                 tr_imgs_addresses,
                 dtype=dtype,
                 parallel_iterations=parallel_iterations
             )
             val_imgs = tf.map_fn(
-                self.get_parse_function(),
+                instance_parse_function,
                 val_imgs_addresses,
                 dtype=dtype,
                 parallel_iterations=parallel_iterations
             )
 
             return tf.stack(tr_imgs), tf.stack(val_imgs)
-
-        if type(folders) == list:
-            classes = dict()
-            for folder in folders:
-                instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
-                classes[folder] = instances
-            folders = classes
 
         keep_keys_with_greater_than_equal_k_items(folders, k + k_validation)
         # folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)

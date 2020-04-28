@@ -6,7 +6,7 @@ import face_recognition
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from tf_datasets import CelebADatabase, LFWDatabase
+from databases import CelebADatabase
 from utils import combine_first_two_axes, get_folders_with_greater_than_equal_k_files
 import tensorflow_addons as tfa
 

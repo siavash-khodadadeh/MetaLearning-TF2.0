@@ -1,5 +1,5 @@
 from models.crossdomain.transfermetalearning.transfer_meta_learning_vgg16 import TransferMetaLearningVGG16
-from tf_datasets import MiniImagenetDatabase, EuroSatDatabase
+from databases import MiniImagenetDatabase, EuroSatDatabase
 
 
 def run_transfer_meta_learning():

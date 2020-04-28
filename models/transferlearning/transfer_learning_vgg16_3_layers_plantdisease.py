@@ -1,5 +1,5 @@
 from models.transferlearning.transfer_learning_vgg16 import TransferLearningVGG16
-from tf_datasets import PlantDiseaseDatabase
+from databases import PlantDiseaseDatabase
 
 
 def run_transfer_learning():

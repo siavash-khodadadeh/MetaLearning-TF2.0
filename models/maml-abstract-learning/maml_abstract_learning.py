@@ -3,7 +3,7 @@ import os
 import tensorflow as tf
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
+from databases import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 
 

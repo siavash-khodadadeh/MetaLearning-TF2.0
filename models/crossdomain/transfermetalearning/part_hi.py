@@ -2,8 +2,9 @@ from typing import Callable
 
 import tensorflow as tf
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from networks.maml_umtra_networks import get_transfer_net, MiniImagenetModel
-from tf_datasets import MiniImagenetDatabase, ISICDatabase, EuroSatDatabase, PlantDiseaseDatabase, ChestXRay8Database
+from networks.maml_umtra_networks import get_transfer_net
+from databases import MiniImagenetDatabase, ISICDatabase, EuroSatDatabase, PlantDiseaseDatabase
+
 
 class TransferLearning(ModelAgnosticMetaLearningModel):
     pass
