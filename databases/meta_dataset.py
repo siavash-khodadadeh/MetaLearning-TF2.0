@@ -19,6 +19,35 @@ class CUBDatabase(JPGParseMixin, Database):
             input_shape=input_shape
         )
 
+    def fix_2d_instances(self, train_folders, val_folders, test_folders):
+        cub_info_file = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/fixed_cubs_bad_examples.txt')
+        if not os.path.exists(cub_info_file):
+            instances = []
+            for item in train_folders:
+                instances.extend([os.path.join(item, file_name) for file_name in os.listdir(item)])
+            for item in val_folders:
+                instances.extend([os.path.join(item, file_name) for file_name in os.listdir(item)])
+            for item in test_folders:
+                instances.extend([os.path.join(item, file_name) for file_name in os.listdir(item)])
+
+            counter = 0
+            fixed_instances = list()
+            for instance in instances:
+                image = tf.image.decode_jpeg(tf.io.read_file(instance))
+
+                if image.shape[2] != 3:
+                    print(f'Overwriting 2d instance with 3d data: {instance}')
+                    fixed_instances.append(instance)
+                    image = tf.squeeze(image, axis=2)
+                    image = tf.stack((image, image, image), axis=2)
+                    image_data = tf.image.encode_jpeg(image)
+                    tf.io.write_file(instance, image_data)
+                    counter += 1
+
+            with open(cub_info_file, 'w') as f:
+                f.write(f'Changed {counter} 2d data points to 3d.\n')
+                f.write('\n'.join(fixed_instances))
+
     def get_train_val_test_folders(self) -> Tuple:
         """Returns train, val and test folders as three lists or three dictionaries.
         Note that the python random seed might have been
@@ -29,6 +58,8 @@ class CUBDatabase(JPGParseMixin, Database):
         train_folders = [os.path.join(images_folder, item) for item in splits['train']]
         val_folders = [os.path.join(images_folder, item) for item in splits['valid']]
         test_folders = [os.path.join(images_folder, item) for item in splits['test']]
+
+        self.fix_2d_instances(train_folders, val_folders, test_folders)
 
         return train_folders, val_folders, test_folders
 
