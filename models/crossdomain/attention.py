@@ -132,7 +132,10 @@ class Combine(tf.keras.layers.Layer):
         b: activations in the solver
         '''
         a, b = x
-        return b * tf.reduce_mean(a, axis=0)
+        a = tf.reduce_mean(tf.reshape(a, (-1, a.shape[-1])), 0)
+#         while a.get_shape().ndims > 1:
+#             a = tf.reduce_mean(a, axis=0)
+        return b * a
 
     def compute_output_shape(self, input_shape):
         # consistent with the shape of solver activations
@@ -152,20 +155,20 @@ def assemble_model(attention, solver, ind):
     assembled_model = tf.keras.models.Model(inputs=[attention.input, solver.input], outputs=output, name='AssembledModel')
     return assembled_model
 
-def get_assembled_model(num_output, ind, architecture=MiniImagenetModel, input_shape=(84, 84, 3)):
-    attention_model = AttentionModel()
-    attention_model = decompose_attention_model(attention_model, input_shape)
-
-    base_model = architecture(num_output)
-    base_input = tf.keras.Input(shape=input_shape, name='base_input')
-    base_model(base_input)
-
-    return attention_model, base_model, assemble_model(attention_model, base_model, ind)
-
 
 if __name__ == '__main__':
+    def get_assembled_model(num_classes, ind, architecture=MiniImagenetModel, input_shape=(84, 84, 3)):
+        attention_model = AttentionModel()
+        attention_model = decompose_attention_model(attention_model, input_shape)
+
+        base_model = architecture(num_classes)
+        base_input = tf.keras.Input(shape=input_shape, name='base_input')
+        base_model(base_input)
+
+        return attention_model, base_model, assemble_model(attention_model, base_model, ind)
+
     attention_model, base_model, assembled_model = get_assembled_model(
-        num_output = 5,
+        num_classes = 5,
         ind = 7
     )
 
