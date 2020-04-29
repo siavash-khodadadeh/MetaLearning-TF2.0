@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from tf_datasets import MiniImagenetDatabase, ISICDatabase
+from databases import MiniImagenetDatabase, ISICDatabase
 
 
 class MiniImageNetIsicMAML(ModelAgnosticMetaLearningModel):

@@ -9,8 +9,8 @@ from tqdm import tqdm
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
-from networks.sml_feature_networks import SimpleModelFeature, MiniImagenetFeature, VariationalAutoEncoderFeature
-from tf_datasets import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
+from networks.sml_feature_networks import SimpleModelFeature
+from databases import OmniglotDatabase, MiniImagenetDatabase
 
 
 class SML(ModelAgnosticMetaLearningModel):

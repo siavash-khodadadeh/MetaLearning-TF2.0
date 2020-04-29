@@ -4,10 +4,11 @@ import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from tf_datasets import MiniImagenetDatabase, PlantDiseaseDatabase, ISICDatabase
+from databases import MiniImagenetDatabase, PlantDiseaseDatabase, ISICDatabase
 
 from typing import List
 from utils import keep_keys_with_greater_than_equal_k_items
+
 
 class SeparateDomainMAML(ModelAgnosticMetaLearningModel):
     def get_train_dataset(self):
@@ -139,6 +140,7 @@ class SeparateDomainMAML(ModelAgnosticMetaLearningModel):
         steps_per_epoch = len(trn_folders.keys()) // (n * meta_batch_size)
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
+
 
 def run_separate_domain():
     test_database = ISICDatabase()
