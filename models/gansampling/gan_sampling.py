@@ -11,7 +11,7 @@ class GANSampling(ModelAgnosticMetaLearningModel):
 
     def __init__(self, *args, **kwargs):
         super(GANSampling, self).__init__(*args, **kwargs)
-        self.gan_vectors_stddev = 0.3
+        self.gan_vectors_max_stddev = 0.5
         self.gan_batch_size = 256
         self.gan_epochs = 300
         self.gan_noise_dim = 100
@@ -58,7 +58,9 @@ class GANSampling(ModelAgnosticMetaLearningModel):
             vectors.append(class_vectors)
             for i in range(self.k + self.k_val_ml - 1):
                 vectors.append(
-                    class_vectors + tf.random.normal(shape=(self.n, 100), mean=0, stddev=np.random.uniform(0, 0.5))
+                    class_vectors + tf.random.normal(
+                        shape=(self.n, 100), mean=0, stddev=np.random.uniform(0, self.gan_vectors_max_stddev)
+                    )
                 )
 
             vectors = tf.reshape(tf.stack(vectors, axis=0), (-1, 100))
