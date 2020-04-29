@@ -1,6 +1,6 @@
 from models.gansampling.gan_sampling import GANSampling
 from networks.maml_umtra_networks import SimpleModel
-from tf_datasets import OmniglotDatabase
+from databases import OmniglotDatabase
 
 
 def run_omniglot():
