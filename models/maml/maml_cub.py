@@ -1,13 +1,13 @@
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from databases import MiniImagenetDatabase
+from databases import CUBDatabase
 
 
-def run_mini_imagenet():
-    mini_imagenet_database = MiniImagenetDatabase()
+def run_cub():
+    cub_database = CUBDatabase()
 
     maml = ModelAgnosticMetaLearningModel(
-        database=mini_imagenet_database,
+        database=cub_database,
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
@@ -26,7 +26,7 @@ def run_mini_imagenet():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='mini_imagenet_with_batch_norm_exp2',
+        experiment_name='cub',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
@@ -37,4 +37,4 @@ def run_mini_imagenet():
 
 
 if __name__ == '__main__':
-    run_mini_imagenet()
+    run_cub()

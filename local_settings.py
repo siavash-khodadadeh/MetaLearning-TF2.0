@@ -12,4 +12,9 @@ ISIC_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d
 EUROSAT_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/EuroSAT/')
 PLANT_DISEASE_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/plant-disease/')
 CHESTX_RAY8_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/ChestX-Ray8')
+CUB_RAW_DATASEST_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/CUB_200_2011')
+AIRCRAFT_RAW_DATASET_ADDRESS = os.path.expanduser(
+    '/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/fgvc-aircraft-2013b'
+)
 FLUSH_OUTPUT = True
+DEBUG = False

@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from tf_datasets import MiniImagenetDatabase
+from databases import MiniImagenetDatabase
 
 
 model = tf.keras.applications.VGG16(include_top=False, weights='imagenet', input_shape=(224, 224, 3))

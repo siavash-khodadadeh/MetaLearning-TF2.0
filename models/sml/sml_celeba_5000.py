@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from models.sml.sml import SML
 from networks.maml_umtra_networks import MiniImagenetModel
-from tf_datasets import CelebADatabase
+from databases import CelebADatabase
 
 
 def run_celeba():

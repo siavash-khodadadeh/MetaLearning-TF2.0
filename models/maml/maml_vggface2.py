@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import VGGSmallModel
-from tf_datasets import VGGFace2Database
+from databases import VGGFace2Database
 
 
 class MAMLVGGFace2(ModelAgnosticMetaLearningModel):
