@@ -3,6 +3,7 @@ from typing import Tuple, Callable
 import json
 
 import tensorflow as tf
+from scipy.io import loadmat
 
 import settings
 
@@ -53,7 +54,14 @@ class CUBDatabase(JPGParseMixin, Database):
         Note that the python random seed might have been
         set here based on the class __init__ function."""
         images_folder = os.path.join(self.raw_database_address, 'CUB_200_2011', 'images')
-        splits = json.load(open(os.path.join(settings.PROJECT_ROOT_ADDRESS, 'databases', 'splits', 'cub_splits.json')))
+        splits = json.load(open(os.path.join(
+            settings.PROJECT_ROOT_ADDRESS,
+            'databases',
+            'meta_dataset_meta',
+            'splits',
+            'cub_splits.json'
+            )
+        ))
 
         train_folders = [os.path.join(images_folder, item) for item in splits['train']]
         val_folders = [os.path.join(images_folder, item) for item in splits['valid']]
@@ -87,7 +95,14 @@ class AirplaneDatabase(JPGParseMixin, Database):
                         classes[variant] = list()
                     classes[variant].append(os.path.join(images_folder, f'{img}.jpg'))
 
-        splits = json.load(open(os.path.join(settings.PROJECT_ROOT_ADDRESS, 'databases', 'splits', 'airplane.json')))
+        splits = json.load(open(os.path.join(
+            settings.PROJECT_ROOT_ADDRESS,
+            'databases',
+            'meta_dataset_meta',
+            'splits',
+            'airplane.json'
+            )
+        ))
         train_folders = {}
         val_folders = {}
         test_folders = {}
@@ -97,6 +112,92 @@ class AirplaneDatabase(JPGParseMixin, Database):
         for item in splits['valid']:
             val_folders[item] = classes[item]
         for item in splits['test']:
+            test_folders[item] = classes[item]
+
+        return train_folders, val_folders, test_folders
+
+
+class DTDDatabase(JPGParseMixin, Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(DTDDatabase, self).__init__(
+            raw_database_address=settings.DTD_RAW_DATASET_ADDRESS,
+            database_address='',
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def get_train_val_test_folders(self) -> Tuple:
+        """Returns train, val and test folders as three lists or three dictionaries.
+        Note that the python random seed might have been
+        set here based on the class __init__ function."""
+        weird_dir_file = os.path.join(self.raw_database_address, 'dtd', 'images', 'waffled', '.directory')
+        if os.path.exists(weird_dir_file):
+            os.remove(weird_dir_file)
+
+        splits = json.load(open(os.path.join(
+            settings.PROJECT_ROOT_ADDRESS,
+            'databases',
+            'meta_dataset_meta',
+            'splits',
+            'dtd.json'
+            )
+        ))
+        images_folder = os.path.join(self.raw_database_address, 'dtd', 'images')
+        train_folders = [os.path.join(images_folder, item) for item in splits['train']]
+        val_folders = [os.path.join(images_folder, item) for item in splits['valid']]
+        test_folders = [os.path.join(images_folder, item) for item in splits['test']]
+
+        return train_folders, val_folders, test_folders
+
+
+class VGGFlowerDatabase(JPGParseMixin, Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(VGGFlowerDatabase, self).__init__(
+            raw_database_address=settings.VGG_FLOWER_RAW_DATASET_ADDRESS,
+            database_address='',
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def get_train_val_test_folders(self) -> Tuple:
+        """Returns train, val and test folders as three lists or three dictionaries.
+        Note that the python random seed might have been
+        set here based on the class __init__ function."""
+        splits = json.load(open(os.path.join(
+            settings.PROJECT_ROOT_ADDRESS,
+            'databases',
+            'meta_dataset_meta',
+            'splits',
+            'vgg_flowers.json'
+            ))
+        )
+        images_folder = os.path.join(self.raw_database_address, 'jpg')
+        instances = [os.path.join(images_folder, folder_name) for folder_name in os.listdir(images_folder)]
+        instances.sort()
+
+        image_labels = loadmat(os.path.join(
+            settings.PROJECT_ROOT_ADDRESS, 'databases', 'meta_dataset_meta', 'vggflowers', 'imagelabels.mat'
+        ))['labels']
+        image_labels = list(image_labels.reshape((-1, )))
+
+        classes = dict()
+        for instance, image_label in zip(instances, image_labels):
+            if image_label not in classes:
+                classes[image_label] = list()
+            classes[image_label].append(instance)
+
+        train_folders = {}
+        val_folders = {}
+        test_folders = {}
+
+        for item in splits['train']:
+            item = int(item[:3])
+            train_folders[item] = classes[item]
+        for item in splits['valid']:
+            item = int(item[:3])
+            val_folders[item] = classes[item]
+        for item in splits['test']:
+            item = int(item[:3])
             test_folders[item] = classes[item]
 
         return train_folders, val_folders, test_folders
