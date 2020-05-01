@@ -18,5 +18,9 @@ AIRCRAFT_RAW_DATASET_ADDRESS = os.path.expanduser(
 )
 DTD_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/dtd-r1.0.1')
 VGG_FLOWER_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/102flowers')
+TRAFFIC_SIGN_RAW_DATASET_ADDRESS = os.path.expanduser(
+    '/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/GTSRB_Final_Training_Images'
+)
+MSCOCO_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/mscoco')
 FLUSH_OUTPUT = True
-DEBUG = False
+DEBUG = True

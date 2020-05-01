@@ -7,6 +7,7 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 
+import settings
 from utils import combine_first_two_axes, keep_keys_with_greater_than_equal_k_items
 
 
@@ -38,7 +39,8 @@ class BaseModel(metaclass=SetupCaller):
         val_seed,  # The seed for validation dataset. -1 means change the samples for each report.
         experiment_name=None,
         val_database=None,
-        target_database=None
+        target_database=None,
+        k_val_train=None,  # This is the number of instances per class for validation set tasks' train set.
     ):
         self.database = database
         self.val_database = val_database if val_database is not None else self.database
@@ -53,6 +55,7 @@ class BaseModel(metaclass=SetupCaller):
         self.k_val_ml = k_val_ml
         self.k_val_val = k_val_val
         self.k_val_test = k_val_test
+        self.k_val_train = k_val_train if k_val_train is not None else self.k
         self.k_test = k_test
         self.meta_batch_size = meta_batch_size
         self.meta_learning_rate = meta_learning_rate
@@ -167,7 +170,7 @@ class BaseModel(metaclass=SetupCaller):
         val_dataset = self.get_supervised_meta_learning_dataset(
             self.val_database.val_folders,
             n=self.n,
-            k=self.k,
+            k=self.k_val_train,
             k_validation=self.k_val_val,
             meta_batch_size=1,
             seed=self.val_seed,
@@ -338,15 +341,17 @@ class BaseModel(metaclass=SetupCaller):
 
         val_counter = 0
         loss_func = self.get_losses_of_tasks_batch(method='val')
-        for (train_ds, val_ds), (train_labels, val_labels) in self.get_val_dataset():
+        val_dataset = self.get_val_dataset()
+        for (train_ds, val_ds), (train_labels, val_labels) in val_dataset:
             val_counter += 1
             # TODO fix validation logging
-            # if val_counter % 5 == 0:
-            #     step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
-            #     # pick the first task in meta batch
-            #     log_train_ds = combine_first_two_axes(train_ds[0, ...])
-            #     log_val_ds = combine_first_two_axes(val_ds[0, ...])
-            #     self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
+            if settings.DEBUG:
+                if val_counter % 5 == 0:
+                    step = epoch_count * val_dataset.steps_per_epoch + val_counter
+                    # pick the first task in meta batch
+                    log_train_ds = combine_first_two_axes(train_ds[0, ...])
+                    log_val_ds = combine_first_two_axes(val_ds[0, ...])
+                    self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
 
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
                 loss_func,

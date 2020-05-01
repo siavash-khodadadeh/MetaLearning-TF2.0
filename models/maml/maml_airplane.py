@@ -1,4 +1,4 @@
-from databases.meta_dataset import AirplaneDatabase
+from databases import AirplaneDatabase
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
 

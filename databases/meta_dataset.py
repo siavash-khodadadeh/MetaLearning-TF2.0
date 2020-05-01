@@ -6,6 +6,7 @@ import tensorflow as tf
 from scipy.io import loadmat
 
 import settings
+from utils import convert_grayscale_images_to_rgb
 
 from .data_bases import Database
 from .parse_mixins import JPGParseMixin
@@ -31,22 +32,10 @@ class CUBDatabase(JPGParseMixin, Database):
             for item in test_folders:
                 instances.extend([os.path.join(item, file_name) for file_name in os.listdir(item)])
 
-            counter = 0
-            fixed_instances = list()
-            for instance in instances:
-                image = tf.image.decode_jpeg(tf.io.read_file(instance))
-
-                if image.shape[2] != 3:
-                    print(f'Overwriting 2d instance with 3d data: {instance}')
-                    fixed_instances.append(instance)
-                    image = tf.squeeze(image, axis=2)
-                    image = tf.stack((image, image, image), axis=2)
-                    image_data = tf.image.encode_jpeg(image)
-                    tf.io.write_file(instance, image_data)
-                    counter += 1
+            num_fixed, fixed_instances = convert_grayscale_images_to_rgb(instances)
 
             with open(cub_info_file, 'w') as f:
-                f.write(f'Changed {counter} 2d data points to 3d.\n')
+                f.write(f'Changed {num_fixed} 2d data points to 3d.\n')
                 f.write('\n'.join(fixed_instances))
 
     def get_train_val_test_folders(self) -> Tuple:
@@ -201,3 +190,88 @@ class VGGFlowerDatabase(JPGParseMixin, Database):
             test_folders[item] = classes[item]
 
         return train_folders, val_folders, test_folders
+
+
+class TrafficSignDatabase(Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(TrafficSignDatabase, self).__init__(
+            raw_database_address=settings.TRAFFIC_SIGN_RAW_DATASET_ADDRESS,
+            database_address='',
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def get_train_val_test_folders(self) -> Tuple:
+        """Returns train, val and test folders as three lists or three dictionaries.
+        Note that the python random seed might have been
+        set here based on the class __init__ function."""
+        # splits = json.load(open(os.path.join(
+        #     settings.PROJECT_ROOT_ADDRESS,
+        #     'databases',
+        #     'meta_dataset_meta',
+        #     'splits',
+        #     'traffic_sign.json'
+        #     ))
+        # )
+        classes_folder = os.path.join(self.raw_database_address, 'GTSRB', 'Final_Training', 'Images')
+        test_classes = [os.path.join(classes_folder, class_folder) for class_folder in os.listdir(classes_folder)]
+
+        return [], [], test_classes
+
+    def _get_parse_function(self) -> Callable:
+        # TODO handle this image format
+        def parse_function(example_address):
+            image = tf.image.decode_ppg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, self.get_input_shape()[:2])
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse_function
+
+
+class MSCOCODatabase(JPGParseMixin, Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(MSCOCODatabase, self).__init__(
+            raw_database_address=settings.MSCOCO_RAW_DATASET_ADDRESS,
+            database_address='',
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def fix_instances(self, img_instances):
+        fixed_file_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data', 'fixed_mscoco_bad_samples')
+        if not os.path.exists(fixed_file_address):
+            num_fixed, fixed_instances = convert_grayscale_images_to_rgb(img_instances)
+
+            with open(fixed_file_address, 'w') as f:
+                f.write(f'Changed {num_fixed} 2d data points to 3d.\n')
+                f.write('\n'.join(fixed_instances))
+
+    def get_train_val_test_folders(self) -> Tuple:
+        # TODO add cropping to images
+        """Returns train, val and test folders as three lists or three dictionaries.
+        Note that the python random seed might have been
+        set here based on the class __init__ function."""
+        images_folder = os.path.join(self.raw_database_address, 'train2017')
+        annotations_folder = os.path.join(self.raw_database_address, 'annotations_trainval2017', 'annotations')
+        instances = json.load(open(os.path.join(annotations_folder, 'instances_train2017.json')))
+
+        test_classes = dict()
+        img_instances = list()
+        instances_seen = set()
+
+        for instance in instances['annotations']:
+            if instance['image_id'] in instances_seen:
+                continue
+            instances_seen.add(instance['image_id'])
+            category_id = str(instance['category_id'])
+            instance_id = instance['image_id']
+            if category_id not in test_classes:
+                test_classes[category_id] = list()
+            test_classes[category_id].append(os.path.join(images_folder, f'{instance_id:012d}.jpg'))
+            img_instances.append(os.path.join(images_folder, f'{instance_id:012d}.jpg'))
+
+        self.fix_instances(img_instances)
+
+        return [], [], test_classes

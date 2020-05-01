@@ -1,4 +1,4 @@
-from databases.meta_dataset import DTDDatabase
+from databases import DTDDatabase
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
 

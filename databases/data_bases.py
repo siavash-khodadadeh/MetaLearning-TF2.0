@@ -21,6 +21,7 @@ class Database(ABC):
         of the code. Also notice that randomness in that function should be just based on python random."""
         self.raw_database_address = raw_database_address
         self.database_address = database_address
+        self.input_shape = input_shape
 
         if random_seed != -1:
             random.seed(random_seed)
@@ -28,8 +29,6 @@ class Database(ABC):
         self.train_folders, self.val_folders, self.test_folders = self.get_train_val_test_folders()
         if random_seed != -1:
             random.seed(None)
-
-        self.input_shape = input_shape
 
     def get_input_shape(self) -> Tuple[int, int, int]:
         return self.input_shape

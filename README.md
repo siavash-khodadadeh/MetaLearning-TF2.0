@@ -144,6 +144,11 @@ Download the data.zip and put it in a folder (for example names ChestX-Ray8) and
 it after copying it in that folder. Then set the variable for RAW_DATASET_ADDRESS
 
 ### Meta-Dataset
+Create a folder named data in project root.
+This folder wil be used for fixing some minor issues in meta datasets.
+For example some of the files are grayscale and they are converted to rgb and etc.
+
+
 Go to https://github.com/google-research/meta-dataset
 
 Download all the datasets based on the instructions provided in the above repository.
@@ -156,3 +161,5 @@ extracted files.
 * AIRCRAFT_RAW_DATASET_ADDRESS
 * DTD_RAW_DATASET_ADDRESS
 * VGG_FLOWER_RAW_DATASET_ADDRESS
+* TRAFFIC_SIGN_RAW_DATASET_ADDRESS
+* MSCOCO_RAW_DATASET_ADDRESS

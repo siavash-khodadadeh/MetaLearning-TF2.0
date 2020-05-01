@@ -42,6 +42,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         val_test_batch_norm_momentum=0.0,
         val_database=None,
         target_database=None,
+        k_val_train=None,
     ):
         super(ModelAgnosticMetaLearningModel, self).__init__(
             database=database,
@@ -50,6 +51,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             k=k,
             k_val_ml=k_val_ml,
             k_val_val=k_val_val,
+            k_val_train=k_val_train,
             k_val_test=k_val_test,
             k_test=k_test,
             meta_batch_size=meta_batch_size,
