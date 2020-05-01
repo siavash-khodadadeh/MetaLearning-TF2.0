@@ -1,12 +1,13 @@
-from databases import VGGFlowerDatabase
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
+from databases import MSCOCODatabase
 
 
-def run_vgg_flower():
-    vgg_flower_database = VGGFlowerDatabase()
+def run_traffic_sign():
+    mscoco_database = MSCOCODatabase()
+
     maml = ModelAgnosticMetaLearningModel(
-        database=vgg_flower_database,
+        database=mscoco_database,
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
@@ -25,15 +26,15 @@ def run_vgg_flower():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='dtd',
+        experiment_name='mscoco',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
 
-    maml.train(iterations=60040)
+    # This dataset is only for evaluation
     maml.evaluate(50, seed=42, use_val_batch_statistics=True)
     maml.evaluate(50, seed=42, use_val_batch_statistics=False)
 
 
 if __name__ == '__main__':
-    run_vgg_flower()
+    run_traffic_sign()

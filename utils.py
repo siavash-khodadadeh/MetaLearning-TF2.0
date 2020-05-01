@@ -20,6 +20,25 @@ def average_gradients(tower_grads, losses):
     return average_grads
 
 
+def convert_grayscale_images_to_rgb(instances):
+    """Gets a list of full path to images and replaces the ones which are grayscale with the same image but in RGB
+    format."""
+    counter = 0
+    fixed_instances = list()
+    for instance in instances:
+        image = tf.image.decode_jpeg(tf.io.read_file(instance))
+
+        if image.shape[2] != 3:
+            print(f'Overwriting 2d instance with 3d data: {instance}')
+            fixed_instances.append(instance)
+            image = tf.squeeze(image, axis=2)
+            image = tf.stack((image, image, image), axis=2)
+            image_data = tf.image.encode_jpeg(image)
+            tf.io.write_file(instance, image_data)
+            counter += 1
+
+    return counter, fixed_instances
+
 def keep_keys_with_greater_than_equal_k_items(folders_dict, k):
     """Gets a dictionary and just keeps the keys which have greater than equal k items."""
     to_be_removed = list()
@@ -280,3 +299,4 @@ if __name__ == '__main__':
     #                    np.matmul(np.transpose(A3), A))
     #
     # print(np.linalg.norm(At))
+
