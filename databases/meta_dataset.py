@@ -275,3 +275,54 @@ class MSCOCODatabase(JPGParseMixin, Database):
         self.fix_instances(img_instances)
 
         return [], [], test_classes
+
+
+class FungiDatabase(JPGParseMixin, Database):
+    def __init__(self, input_shape=(84, 84, 3)):
+        super(FungiDatabase, self).__init__(
+            raw_database_address=settings.FUNGI_RAW_DATASET_ADDRESS,
+            database_address='',
+            random_seed=-1,
+            input_shape=input_shape
+        )
+
+    def get_train_val_test_folders(self) -> Tuple:
+        """Returns train, val and test folders as three lists or three dictionaries.
+        Note that the python random seed might have been
+        set here based on the class __init__ function."""
+        images_folder = os.path.join(self.raw_database_address, 'fungi_train_val')
+        splits = json.load(open(os.path.join(
+            settings.PROJECT_ROOT_ADDRESS,
+            'databases',
+            'meta_dataset_meta',
+            'splits',
+            'fungi.json'
+        )
+        ))
+        train_annotations = json.load(open(os.path.join(
+            self.raw_database_address, 'train_val_annotations', 'train.json'))
+        )
+        val_annotations = json.load(open(os.path.join(self.raw_database_address, 'train_val_annotations', 'val.json')))
+        images_list = train_annotations['images'] + val_annotations['images']
+        id_to_filename = dict()
+        for image in images_list:
+            id_to_filename[image['id']] = image['file_name']
+        annotations = train_annotations['annotations'] + val_annotations['annotations']
+
+        classes = dict()
+        for annotation in annotations:
+            class_id = f'{annotation["category_id"]:04d}'
+            image_file_name = id_to_filename[annotation['image_id']]
+            if class_id not in classes:
+                classes[class_id] = list()
+            classes[class_id].append(os.path.join(images_folder, image_file_name))
+
+        splits['train'] = set([item[:4] for item in splits['train']])
+        splits['valid'] = set([item[:4] for item in splits['valid']])
+        splits['test'] = set([item[:4] for item in splits['test']])
+
+        train_folders = {class_id: classes[class_id] for class_id in classes if class_id in splits['train']}
+        val_folders = {class_id: classes[class_id] for class_id in classes if class_id in splits['valid']}
+        test_folders = {class_id: classes[class_id] for class_id in classes if class_id in splits['test']}
+
+        return train_folders, val_folders, test_folders
