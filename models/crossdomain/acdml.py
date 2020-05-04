@@ -26,7 +26,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_val_dataset(self):
-        databases = [ISICDatabase()]
+        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
 
         val_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -41,7 +41,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return val_dataset
 
     def get_test_dataset(self, seed=-1):
-        databases = [ISICDatabase()]
+        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -113,6 +113,9 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 val_ds = args[indices[1] * 4 + 1][0, ...]
                 val_labels = args[indices[1] * 4 + 3][0, ...]
                 val_domain = args[indices[1] * 4][1, ...]
+#                 val_ds = args[indices[0] * 4 + 1][0, ...]
+#                 val_labels = args[indices[0] * 4 + 3][0, ...]
+#                 val_domain = args[indices[0] * 4][1, ...]
                 return tr_ds, tr_labels, tr_domain, val_ds, val_labels, val_domain
 
             return tf.py_function(f, inp=tensors, Tout=[tf.string, tf.float32, tf.string] * 2)
@@ -189,7 +192,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
     def initialize_network(self):
         model = self.network_cls(num_classes=self.n)
-        model([tf.zeros(shape=(1, *self.database.input_shape)), tf.zeros(shape=(1, *self.database.input_shape))])
+        model([tf.zeros(shape=(1, 84, 84, 3)), tf.zeros(shape=(1, 84, 84, 3))])
         return model
 
     def train(self, iterations=5):
@@ -361,6 +364,157 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
         return self.updated_models[-1]
 
+    def report_validation_loss_and_accuracy(self, epoch_count):
+        self.val_loss_metric.reset_states()
+        self.val_accuracy_metric.reset_states()
+
+        val_counter = 0
+        loss_func = self.get_losses_of_tasks_batch(method='val')
+        for (train_ds, train_dom, val_ds, val_dom), (train_labels, val_labels) in self.get_val_dataset():
+            val_counter += 1
+            # TODO fix validation logging
+            # if val_counter % 5 == 0:
+            #     step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
+            #     # pick the first task in meta batch
+            #     log_train_ds = combine_first_two_axes(train_ds[0, ...])
+            #     log_val_ds = combine_first_two_axes(val_ds[0, ...])
+            #     self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
+
+            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
+                loss_func,
+                elems=(
+                    train_ds,
+                    train_dom,
+                    val_ds,
+                    val_dom,
+                    train_labels,
+                    val_labels,
+                ),
+                dtype=(tf.float32, tf.float32),
+                parallel_iterations=1
+            )
+            final_loss = tf.reduce_mean(tasks_final_losses)
+            final_acc = tf.reduce_mean(tasks_final_accuracy)
+            self.val_loss_metric.update_state(final_loss)
+            self.val_accuracy_metric.update_state(final_acc)
+
+        self.log_metric(self.val_summary_writer, 'Loss', self.val_loss_metric, step=epoch_count)
+        self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
+        print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
+        print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
+
+
+    def get_losses_of_tasks_batch_eval(self, iterations, training):
+        def f(inputs):
+            train_ds, train_dom, val_ds, val_dom, train_labels, val_labels = inputs
+            train_ds = combine_first_two_axes(train_ds)
+            train_dom = combine_first_two_axes(train_dom)
+            val_ds = combine_first_two_axes(val_ds)
+            val_dom = combine_first_two_axes(val_dom)
+
+            self._initialize_eval_model()
+            for i in range(iterations):
+                self._train_model_for_eval(train_ds, train_dom, train_labels)
+            val_acc, val_loss = self._evaluate_model_for_eval(val_ds, val_dom, val_labels, training)
+            return val_acc, val_loss
+        return f
+
+    @tf.function
+    def _train_model_for_eval(self, train_ds, train_dom, train_labels):
+        with tf.GradientTape(persistent=False) as train_tape:
+            train_tape.watch(self.eval_model.meta_trainable_variables)
+            logits = self.eval_model([train_dom, train_ds], training=True)
+            loss = self.inner_loss(train_labels, logits)
+        gradients = train_tape.gradient(loss, self.eval_model.meta_trainable_variables)
+        self.create_meta_model(self.eval_model, self.eval_model, gradients, assign=True)
+
+    @tf.function
+    def _evaluate_model_for_eval(self, val_ds, val_dom, val_labels, training):
+        updated_model_logits = self.eval_model([val_dom, val_ds], training=training)
+        val_loss = self.outer_loss(val_labels, updated_model_logits)
+
+        predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
+        real_labels = self.convert_labels_to_real_labels(val_labels)
+
+        val_acc = tf.reduce_mean(tf.cast(tf.equal(predicted_class_labels, real_labels), tf.float32))
+        return val_acc, val_loss
+
+    def create_meta_model(self, updated_model, model, gradients, assign=False):
+        k = 0
+        variables = list()
+
+        for i in range(len(model.layers)):
+            if model.layers[i].trainable:
+                if (isinstance(model.layers[i], tf.keras.layers.Conv2D) or
+                        isinstance(model.layers[i], tf.keras.layers.Dense)):
+                    if model.layers[i].inner_trainable:
+                        if assign:
+                            updated_model.layers[i].kernel.assign(model.layers[i].kernel - self.lr_inner_ml * gradients[k])
+                        else:
+                            updated_model.layers[i].kernel = model.layers[i].kernel - self.lr_inner_ml * gradients[k]
+                    else:
+                        if assign:
+                            updated_model.layers[i].kernel.assign(model.layers[i].kernel)
+                        else:
+                            updated_model.layers[i].kernel = model.layers[i].kernel
+                    k += 1
+                    variables.append(updated_model.layers[i].kernel)
+
+                    if model.layers[i].inner_trainable:
+                        if assign:
+                            updated_model.layers[i].bias.assign(model.layers[i].bias - self.lr_inner_ml * gradients[k])
+                        else:
+                            updated_model.layers[i].bias = model.layers[i].bias - self.lr_inner_ml * gradients[k]
+                    else:
+                        if assign:
+                            updated_model.layers[i].bias.assign(model.layers[i].bias)
+                        else:
+                            updated_model.layers[i].bias = model.layers[i].bias
+                    k += 1
+                    variables.append(updated_model.layers[i].bias)
+
+                elif isinstance(model.layers[i], tf.keras.layers.BatchNormalization):
+                    if hasattr(model.layers[i], 'moving_mean') and model.layers[i].moving_mean is not None:
+                        if assign:
+                            updated_model.layers[i].moving_mean.assign(model.layers[i].moving_mean)
+                        else:
+                            updated_model.layers[i].moving_mean = model.layers[i].moving_mean
+                    if hasattr(model.layers[i], 'moving_variance') and model.layers[i].moving_variance is not None:
+                        if assign:
+                            updated_model.layers[i].moving_variance.assign(model.layers[i].moving_variance)
+                        else:
+                            updated_model.layers[i].moving_variance = model.layers[i].moving_variance
+                    if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
+                        if model.layers[i].inner_trainable:
+                            if assign:
+                                updated_model.layers[i].gamma.assign(
+                                    model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                                )
+                            else:
+                                updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
+                        else:
+                            if assign:
+                                updated_model.layers[i].gamma.assign(model.layers[i].gamma)
+                            else:
+                                updated_model.layers[i].gamma = model.layers[i].gamma
+                        k += 1
+                        variables.append(updated_model.layers[i].gamma)
+                    if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:
+                        if model.layers[i].inner_trainable:
+                            if assign:
+                                updated_model.layers[i].beta.assign(model.layers[i].beta - self.lr_inner_ml * gradients[k])
+                            else:
+                                updated_model.layers[i].beta = model.layers[i].beta - self.lr_inner_ml * gradients[k]
+                        else:
+                            if assign:
+                                updated_model.layers[i].beta.assign(model.layers[i].beta)
+                            else:
+                                updated_model.layers[i].beta = model.layers[i].beta
+                        k += 1
+                        variables.append(updated_model.layers[i].beta)
+
+        setattr(updated_model, 'meta_trainable_variables', variables)
+
 @name_repr('AssembledModel')
 def get_assembled_model(num_classes, ind=7, architecture=MiniImagenetModel, input_shape=(84, 84, 3)):
     attention_model = AttentionModel()
@@ -399,7 +553,7 @@ def run_acdml():
     )
 
     acdml.train(iterations=60000)
-    acdml.evaluate(100, seed=14)
+#     acdml.evaluate(100, seed=14)
 
 
 if __name__ == '__main__':
