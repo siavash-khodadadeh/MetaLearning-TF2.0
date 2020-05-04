@@ -6,6 +6,7 @@ maintain two nodes (with and without attention), which is inefficient.'''
 
 class MiniImagenetModel(tf.keras.Model):
     name = 'MiniImagenetModel'
+
     # can be replaced with other solver network
 
     def __init__(self, num_classes):
@@ -135,8 +136,8 @@ class Combine(tf.keras.layers.Layer):
         '''
         a, b = x
         a = tf.reduce_mean(tf.reshape(a, (-1, a.shape[-1])), 0)
-#         while a.get_shape().ndims > 1:
-#             a = tf.reduce_mean(a, axis=0)
+        #         while a.get_shape().ndims > 1:
+        #             a = tf.reduce_mean(a, axis=0)
         return b * a
 
     def compute_output_shape(self, input_shape):
@@ -155,7 +156,8 @@ def assemble_model(attention, solver, ind, inner_trainable=False):
         output = layers[i](output)
         setattr(layers[i], 'inner_trainable', True)
 
-    assembled_model = tf.keras.models.Model(inputs=[attention.input, solver.input], outputs=output, name='AssembledModel')
+    assembled_model = tf.keras.models.Model(inputs=[attention.input, solver.input], outputs=output,
+                                            name='AssembledModel')
 
     for layer in assembled_model.layers:
         if not hasattr(layer, 'inner_trainable'):
@@ -176,8 +178,8 @@ if __name__ == '__main__':
         return attention_model, base_model, assemble_model(attention_model, base_model, ind)
 
     attention_model, base_model, assembled_model = get_assembled_model(
-        num_classes = 5,
-        ind = 7
+        num_classes=5,
+        ind=7
     )
 
     print('\n--------------------')
