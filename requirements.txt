@@ -10,3 +10,4 @@ matplotlib
 seaborn
 # for face recognition
 face_recognition
+tensorflow_hub
