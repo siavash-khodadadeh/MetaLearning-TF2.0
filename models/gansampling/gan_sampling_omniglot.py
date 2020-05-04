@@ -21,7 +21,7 @@ def run_omniglot():
         k_val_test=15,
         k_test=1,
         meta_batch_size=4,
-        num_steps_ml=1,
+        num_steps_ml=5,  # 1 for prev result
         lr_inner_ml=0.4,
         num_steps_validation=5,
         save_after_iterations=1000,
