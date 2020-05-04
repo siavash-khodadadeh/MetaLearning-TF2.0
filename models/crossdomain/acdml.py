@@ -153,35 +153,6 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=False)
         steps_per_epoch = steps_per_epoch // meta_batch_size
 
-        # import matplotlib.pyplot as plt
-        #
-        # for item in dataset:
-        #     (tr_ds, tr_dom, val_ds, val_dom), (tr_labels, val_labels) = item
-        #     print(tr_ds.shape)
-        #     print(val_ds.shape)
-        #     print(tr_dom.shape)
-        #     print(val_dom.shape)
-        #     print(tr_labels.shape)
-        #     print(val_labels.shape)
-        #
-        #     for i in range(n):
-        #         for j in range(k):
-        #             plt.imshow(tr_ds[i, j, ...])
-        #             plt.show()
-        #     for i in range(n):
-        #         for j in range(k):
-        #             plt.imshow(tr_dom[i, j, ...])
-        #             plt.show()
-        #     for i in range(n):
-        #         for j in range(k):
-        #             plt.imshow(val_dom[i, j, ...])
-        #             plt.show()
-        #     for i in range(n):
-        #         for j in range(k_validation):
-        #             plt.imshow(val_ds[i, j, ...])
-        #             plt.show()
-        #     break
-
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
@@ -367,13 +338,6 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         loss_func = self.get_losses_of_tasks_batch(method='val')
         for (train_ds, train_dom, val_ds, val_dom), (train_labels, val_labels) in self.get_val_dataset():
             val_counter += 1
-            # TODO fix validation logging
-            # if val_counter % 5 == 0:
-            #     step = epoch_count * self.val_dataset.steps_per_epoch + val_counter
-            #     # pick the first task in meta batch
-            #     log_train_ds = combine_first_two_axes(train_ds[0, ...])
-            #     log_val_ds = combine_first_two_axes(val_ds[0, ...])
-            #     self.log_images(self.val_summary_writer, log_train_ds, log_val_ds, step)
 
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
                 loss_func,
@@ -397,7 +361,6 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
-
 
     def get_losses_of_tasks_batch_eval(self, iterations, training):
         def f(inputs):
