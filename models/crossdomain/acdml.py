@@ -41,7 +41,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return val_dataset
 
     def get_test_dataset(self, seed=-1):
-        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
+        databases = [ISICDatabase()]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -84,7 +84,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 n,
                 k,
                 k_validation,
-                meta_batch_size=2,
+                meta_batch_size=3,
                 one_hot_labels=one_hot_labels,
                 reshuffle_each_iteration=reshuffle_each_iteration,
                 seed=seed,
@@ -110,12 +110,9 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 tr_ds = args[indices[0] * 4][0, ...]
                 tr_labels = args[indices[0] * 4 + 2][0, ...]
                 tr_domain = args[indices[0] * 4][1, ...]
-                val_ds = args[indices[1] * 4 + 1][0, ...]
-                val_labels = args[indices[1] * 4 + 3][0, ...]
-                val_domain = args[indices[1] * 4][1, ...]
-#                 val_ds = args[indices[0] * 4 + 1][0, ...]
-#                 val_labels = args[indices[0] * 4 + 3][0, ...]
-#                 val_domain = args[indices[0] * 4][1, ...]
+                val_ds = args[indices[0] * 4 + 1][0, ...]
+                val_labels = args[indices[0] * 4 + 3][0, ...]
+                val_domain = args[indices[0] * 4][2, ...]
                 return tr_ds, tr_labels, tr_domain, val_ds, val_labels, val_domain
 
             return tf.py_function(f, inp=tensors, Tout=[tf.string, tf.float32, tf.string] * 2)
@@ -153,8 +150,6 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = dataset.map(choose_two_domains)
         dataset = dataset.map(parse_function)
 
-        # TODO fix this for different meta batch sizes. Check to see if it works with removing the following line.
-        meta_batch_size = 1
         dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=False)
         steps_per_epoch = steps_per_epoch // meta_batch_size
 
