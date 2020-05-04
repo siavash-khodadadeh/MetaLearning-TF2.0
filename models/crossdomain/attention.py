@@ -83,6 +83,7 @@ class AttentionModel(tf.keras.Model):
         self.relu3 = tf.keras.layers.ReLU(name='at_relu3')
 
         self.flatten = tf.keras.layers.Flatten(name='at_flatten')
+        self.softmax = tf.keras.layers.Softmax(name='at_softmax')
 
     def call(self, inputs, training=False):
         output = inputs
@@ -103,6 +104,7 @@ class AttentionModel(tf.keras.Model):
         output = self.relu3(output)
 
         output = self.flatten(output)
+        output = self.softmax(output)
         return output
 
 def decompose_attention_model(attention, input_shape=(84, 84, 3)):
@@ -143,7 +145,7 @@ class Combine(tf.keras.layers.Layer):
         shape_a, shape_b = input_shape
         return shape_b
 
-def assemble_model(attention, solver, ind):
+def assemble_model(attention, solver, ind, inner_trainable=False):
     # attention is multiplied to the output of ind-th layer
 
     layers = solver.layers
@@ -151,8 +153,14 @@ def assemble_model(attention, solver, ind):
 
     for i in range(ind + 1, len(layers)):
         output = layers[i](output)
+        setattr(layers[i], 'inner_trainable', True)
 
     assembled_model = tf.keras.models.Model(inputs=[attention.input, solver.input], outputs=output, name='AssembledModel')
+
+    for layer in assembled_model.layers:
+        if not hasattr(layer, 'inner_trainable'):
+            setattr(layer, 'inner_trainable', inner_trainable)
+
     return assembled_model
 
 
@@ -179,13 +187,6 @@ if __name__ == '__main__':
     print(assembled_model([input1, input2]).numpy())
 
     print('\n--------------------')
-    print('freeze base model')
-    base_model.trainable = False
-    attention_model.trainable = True
-    assembled_model.summary()
-
-    print('\n--------------------')
-    print('freeze attention model')
-    base_model.trainable = True
-    attention_model.trainable = False
-    assembled_model.summary()
+    print('trainable during inner loop')
+    for layer in assembled_model.layers:
+        print(layer.name, layer.inner_trainable)
