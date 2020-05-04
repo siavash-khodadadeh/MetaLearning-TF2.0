@@ -187,19 +187,6 @@ if __name__ == '__main__':
     print(assembled_model([input1, input2]).numpy())
 
     print('\n--------------------')
-    print('freeze base model')
-    base_model.trainable = False
-    attention_model.trainable = True
-    assembled_model.summary()
-
-    print('\n--------------------')
-    print('freeze attention model')
-    base_model.trainable = True
-    attention_model.trainable = False
-    assembled_model.summary()
-
-    
-    print('\n--------------------')
     print('trainable during inner loop')
     for layer in assembled_model.layers:
         print(layer.name, layer.inner_trainable)
