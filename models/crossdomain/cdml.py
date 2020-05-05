@@ -4,7 +4,9 @@ import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from databases import MiniImagenetDatabase, PlantDiseaseDatabase, ISICDatabase, AirplaneDatabase, CUBDatabase
+from databases import MiniImagenetDatabase, AirplaneDatabase, CUBDatabase, OmniglotDatabase, DTDDatabase, \
+    FungiDatabase, VGGFlowerDatabase, PlantDiseaseDatabase, ISICDatabase, EuroSatDatabase, MSCOCODatabase, \
+    ChestXRay8Database
 from databases.data_bases import Database
 
 from typing import List
@@ -12,19 +14,15 @@ from typing import List
 
 class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
     def get_train_dataset(self):
-        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
-
-        dataset = self.get_cross_domain_meta_learning_dataset(
-            databases=databases,
-            n=self.n,
-            k=self.k,
-            k_validation=self.k_val_ml,
-            meta_batch_size=self.meta_batch_size
-        )
-        return dataset
-
-    def get_val_dataset(self):
-        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
+        databases = [
+            MiniImagenetDatabase(),
+            AirplaneDatabase(),
+            CUBDatabase(),
+            OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100),
+            DTDDatabase(),
+            FungiDatabase(),
+            VGGFlowerDatabase()
+        ]
 
         dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -39,6 +37,9 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             image = tf.image.resize(image, (84, 84))
+            if tf.shape(image)[2] == 1:
+                image = tf.squeeze(image, axis=2)
+                image = tf.stack((image, image, image), axis=2)
             image = tf.cast(image, tf.float32)
             return image / 255.
         return parse_function
@@ -74,7 +75,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             datasets.append(dataset)
         datasets = tuple(datasets)
 
-        def choose_two_domains(*domains):
+        def choose_one_domain(*domains):
             tensors = []
             for domain in domains:
                 (tr_ds, val_ds), (tr_labels, val_labels) = domain
@@ -121,7 +122,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
         dataset = tf.data.Dataset.zip(datasets)
         # TODO steps per epoch can be inferred from tf.data.experimental.cardinality(dataset)
-        dataset = dataset.map(choose_two_domains)
+        dataset = dataset.map(choose_one_domain)
         dataset = dataset.map(parse_function)
 
         dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=False)
@@ -151,7 +152,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
 
 def run_ccdml():
-    test_database = ISICDatabase()
+    test_database = EuroSatDatabase()
     ccdml = CombinedCrossDomainMetaLearning(
         database=test_database,
         network_cls=MiniImagenetModel,
@@ -178,7 +179,7 @@ def run_ccdml():
     )
 
     ccdml.train(iterations=60000)
-    ccdml.evaluate(100, seed=14)
+    ccdml.evaluate(50, seed=14)
 
 
 if __name__ == '__main__':

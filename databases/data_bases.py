@@ -27,11 +27,48 @@ class Database(ABC):
             random.seed(random_seed)
 
         self.train_folders, self.val_folders, self.test_folders = self.get_train_val_test_folders()
+
+        self.train_folders = self.convert_to_dict(self.train_folders)
+        self.val_folders = self.convert_to_dict(self.val_folders)
+        self.test_folders = self.convert_to_dict(self.test_folders)
+
         if random_seed != -1:
             random.seed(None)
 
+    def convert_to_dict(self, folders):
+        if type(folders) == list:
+            classes = dict()
+            for folder in folders:
+                instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
+                classes[folder] = instances
+
+            folders = classes
+        return folders
+
     def get_input_shape(self) -> Tuple[int, int, int]:
         return self.input_shape
+
+    def get_all_instances(self, partition_name='all'):
+        """Return all instances of a partition of dataset
+        Partition can be 'train', 'val', 'test' or 'all'
+        """
+        instances = list()
+        if partition_name == 'all':
+            partitions = (self.train_folders, self.val_folders, self.test_folders)
+        elif partition_name == 'train':
+            partitions = (self.train_folders, )
+        elif partition_name == 'test':
+            partitions = (self.test_folders,)
+        elif partition_name == 'val':
+            partitions = (self.val_folders, )
+        else:
+            raise Exception('The argument partition_name should be all, val, test or train.')
+
+        for partition in partitions:
+            for class_name, items in partition.items():
+                instances.extend(items)
+
+        return instances
 
     @abstractmethod
     def get_train_val_test_folders(self) -> Tuple:

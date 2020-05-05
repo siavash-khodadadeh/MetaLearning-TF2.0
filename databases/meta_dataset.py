@@ -181,13 +181,13 @@ class VGGFlowerDatabase(JPGParseMixin, Database):
 
         for item in splits['train']:
             item = int(item[:3])
-            train_folders[item] = classes[item]
+            train_folders[str(item)] = classes[item]
         for item in splits['valid']:
             item = int(item[:3])
-            val_folders[item] = classes[item]
+            val_folders[str(item)] = classes[item]
         for item in splits['test']:
             item = int(item[:3])
-            test_folders[item] = classes[item]
+            test_folders[str(item)] = classes[item]
 
         return train_folders, val_folders, test_folders
 
