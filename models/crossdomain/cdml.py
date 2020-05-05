@@ -34,6 +34,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_parse_function(self):
+        @tf.function
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             image = tf.image.resize(image, (84, 84))
