@@ -3,18 +3,28 @@ import tensorflow as tf
 import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
-from databases import MiniImagenetDatabase, PlantDiseaseDatabase, ISICDatabase, AirplaneDatabase, CUBDatabase
+from databases import MiniImagenetDatabase, PlantDiseaseDatabase, ISICDatabase, AirplaneDatabase, CUBDatabase, \
+    OmniglotDatabase, DTDDatabase, FungiDatabase, VGGFlowerDatabase
 from databases.data_bases import Database
 from models.crossdomain.attention import MiniImagenetModel, AttentionModel, decompose_attention_model, assemble_model
 
 from tqdm import tqdm
 from typing import List
 from decorators import name_repr
-from utils import combine_first_two_axes, keep_keys_with_greater_than_equal_k_items
+from utils import combine_first_two_axes
+
 
 class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
     def get_train_dataset(self):
-        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
+        databases = [
+            MiniImagenetDatabase(),
+            AirplaneDatabase(),
+            CUBDatabase(),
+            OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100),
+            DTDDatabase(),
+            FungiDatabase(),
+            VGGFlowerDatabase()
+        ]
 
         dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -26,7 +36,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_val_dataset(self):
-        databases = [MiniImagenetDatabase(), AirplaneDatabase(), CUBDatabase()]
+        databases = [ISICDatabase(), ISICDatabase(), ISICDatabase()]
 
         val_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -105,7 +115,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 tensors.append(val_labels)
 
             def f(*args):
-#                 np.random.seed(42)
+                #  np.random.seed(42)
                 indices = np.random.choice(range(len(datasets)), size=2, replace=False)
                 tr_ds = args[indices[0] * 4][0, ...]
                 tr_labels = args[indices[0] * 4 + 2][0, ...]
@@ -511,8 +521,9 @@ def run_acdml():
     )
 
     acdml.train(iterations=60000)
-#     acdml.evaluate(100, seed=14)
+    # acdml.evaluate(100, seed=14)
 
 
 if __name__ == '__main__':
+    tf.config.set_visible_devices([], 'GPU')
     run_acdml()
