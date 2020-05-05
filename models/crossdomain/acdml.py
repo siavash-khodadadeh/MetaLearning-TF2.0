@@ -70,6 +70,9 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         def parse_function(example_address):
             image = tf.image.decode_jpeg(tf.io.read_file(example_address))
             image = tf.image.resize(image, (84, 84))
+            if tf.shape(image)[2] == 1:
+                image = tf.squeeze(image, axis=2)
+                image = tf.stack((image, image, image), axis=2)
             image = tf.cast(image, tf.float32)
             return image / 255.
         return parse_function
@@ -160,7 +163,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = dataset.map(choose_two_domains)
         dataset = dataset.map(parse_function)
 
-        dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=False)
+        dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=True)
         steps_per_epoch = steps_per_epoch // meta_batch_size
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
@@ -525,5 +528,4 @@ def run_acdml():
 
 
 if __name__ == '__main__':
-    tf.config.set_visible_devices([], 'GPU')
     run_acdml()
