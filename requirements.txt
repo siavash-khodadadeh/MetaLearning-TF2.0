@@ -1,5 +1,5 @@
 tensorflow-gpu==2.2.0-rc2
-tfa-nightly-0.10.0.dev20200502100543
+tfa-nightly==0.10.0.dev20200502100543
 mock
 tqdm
 numpy

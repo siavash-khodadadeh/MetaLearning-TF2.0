@@ -421,13 +421,6 @@ class BaseModel(metaclass=SetupCaller):
         if seed != -1:
             np.random.seed(seed)
 
-        if type(folders) == list:
-            classes = dict()
-            for folder in folders:
-                instances = [os.path.join(folder, file_name) for file_name in os.listdir(folder)]
-                classes[folder] = instances
-            folders = classes
-
         def _get_instances(class_dir_address):
             def get_instances(class_dir_address):
                 class_dir_address = class_dir_address.numpy().decode('utf-8')

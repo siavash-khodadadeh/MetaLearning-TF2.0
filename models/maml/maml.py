@@ -144,10 +144,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     if hasattr(model.layers[i], 'gamma') and model.layers[i].gamma is not None:
                         if assign:
                             updated_model.layers[i].gamma.assign(
-                                model.laeyrs[i].gamma - self.lr_inner_ml * gradients[k]
+                                model.layers[i].gamma - self.lr_inner_ml * gradients[k]
                             )
                         else:
-                            updated_model.layers[i].gamma = model.laeyrs[i].gamma - self.lr_inner_ml * gradients[k]
+                            updated_model.layers[i].gamma = model.layers[i].gamma - self.lr_inner_ml * gradients[k]
                         k += 1
                         variables.append(updated_model.layers[i].gamma)
                     if hasattr(model.layers[i], 'beta') and model.layers[i].beta is not None:

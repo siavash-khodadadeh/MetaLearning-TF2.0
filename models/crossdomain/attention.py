@@ -180,6 +180,10 @@ if __name__ == '__main__':
         ind = 7
     )
 
+    attention_model.summary()
+    base_model.summary()
+    assembled_model.summary()
+
     print('\n--------------------')
     print('test output')
     input1 = tf.keras.backend.random_uniform((2, 84, 84, 3), minval=0, maxval=1)
