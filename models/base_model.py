@@ -1,7 +1,7 @@
 import os
 import sys
 from abc import abstractmethod
-from typing import List
+from typing import List, Dict
 
 import tensorflow as tf
 import numpy as np
@@ -401,7 +401,7 @@ class BaseModel(metaclass=SetupCaller):
 
     def get_supervised_meta_learning_dataset(
             self,
-            folders: List[str],
+            folders: Dict[str, List[str]],
             n: int,
             k: int,
             k_validation: int,
@@ -480,7 +480,11 @@ class BaseModel(metaclass=SetupCaller):
         labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
 
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        if steps_per_epoch == 0:
+            dataset = dataset.repeat(-1).take(meta_batch_size).batch(meta_batch_size)
+        else:
+            dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
