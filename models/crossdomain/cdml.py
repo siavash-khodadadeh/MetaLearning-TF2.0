@@ -125,7 +125,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = dataset.map(choose_one_domain)
         dataset = dataset.map(parse_function)
 
-        dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=False)
+        dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=True)
         steps_per_epoch = steps_per_epoch // meta_batch_size
 
         # import matplotlib.pyplot as plt
