@@ -164,8 +164,12 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = dataset.map(choose_two_domains)
         dataset = dataset.map(parse_function)
 
-        dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=True)
         steps_per_epoch = steps_per_epoch // meta_batch_size
+        if steps_per_epoch == 0:
+            steps_per_epoch = 1
+            dataset = dataset.repeat(meta_batch_size)
+
+        dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
