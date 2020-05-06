@@ -65,25 +65,25 @@ class MiniImagenetModel(tf.keras.Model):
 class AttentionModel(tf.keras.Model):
     name = 'AttentionModel'
 
-    def __init__(self):
+    def __init__(self, num_features=64):
         super(AttentionModel, self).__init__(name='attention_model')
         self.conv1 = tf.keras.layers.Conv2D(16, 3, name='at_conv1')
         self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='at_bn1')
         self.max_pool1 = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='at_max_pool1')
         self.relu1 = tf.keras.layers.ReLU(name='at_relu1')
 
-        self.conv2 = tf.keras.layers.Conv2D(4, 3, name='at_conv2')
+        self.conv2 = tf.keras.layers.Conv2D(16, 3, name='at_conv2')
         self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='at_bn2')
         self.max_pool2 = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='at_max_pool2')
         self.relu2 = tf.keras.layers.ReLU(name='at_relu2')
 
-        self.conv3 = tf.keras.layers.Conv2D(1, 3, name='at_conv3')
+        self.conv3 = tf.keras.layers.Conv2D(16, 3, name='at_conv3')
         self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='at_bn3')
         self.max_pool3 = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='at_max_pool3')
         self.relu3 = tf.keras.layers.ReLU(name='at_relu3')
 
-        self.flatten = tf.keras.layers.Flatten(name='at_flatten')
-        self.softmax = tf.keras.layers.Softmax(name='at_softmax')
+        self.dense = tf.keras.layers.Dense(num_features, activation='softmax', name='at_dense')
+#         self.flatten = tf.keras.layers.Flatten(name='at_flatten')
 
     def call(self, inputs, training=False):
         output = inputs
@@ -103,8 +103,8 @@ class AttentionModel(tf.keras.Model):
         output = self.max_pool3(output)
         output = self.relu3(output)
 
-        output = self.flatten(output)
-        output = self.softmax(output)
+        output = self.dense(output)
+#         output = self.flatten(output)
         return output
 
 def decompose_attention_model(attention, input_shape=(84, 84, 3)):
