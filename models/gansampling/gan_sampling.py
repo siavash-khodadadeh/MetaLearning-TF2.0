@@ -148,26 +148,26 @@ class GANSampling(ModelAgnosticMetaLearningModel):
 
             yield (train_ds, val_ds), (train_labels, val_labels)
 
-        for item in get_task():
-            (generated_image, val_generated_image), (_, _) = item
-            # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
-            # generated_image = self.gan_generator.predict(input_vector)
-            generated_image = generated_image[:, 0, :, :, :]
-            generated_image = generated_image
-            fig, axes = plt.subplots(2, self.n)
-            for i in range(self.n):
-                image = generated_image[i, :, :, :]
-                axes[0, i].imshow(image)
-
-            # val_input_vector = self.generate_by_gan(class_vectors=input_vector)
-            # val_generated_image = self.gan_generator.predict(val_input_vector)
-            val_generated_image = val_generated_image[:, 0, :, :, :]
-            val_generated_image = val_generated_image
-            for i in range(self.n):
-                val_image = val_generated_image[i, :, :, :]
-                axes[1, i].imshow(val_image)  # cmap='gray' for omniglot
-            plt.show()
-        exit()
+        # for item in get_task():
+        #     (generated_image, val_generated_image), (_, _) = item
+        #     # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
+        #     # generated_image = self.gan_generator.predict(input_vector)
+        #     generated_image = generated_image[:, 0, :, :, :]
+        #     generated_image = generated_image
+        #     fig, axes = plt.subplots(2, self.n)
+        #     for i in range(self.n):
+        #         image = generated_image[i, :, :, :]
+        #         axes[0, i].imshow(image)
+        #
+        #     # val_input_vector = self.generate_by_gan(class_vectors=input_vector)
+        #     # val_generated_image = self.gan_generator.predict(val_input_vector)
+        #     val_generated_image = val_generated_image[:, 0, :, :, :]
+        #     val_generated_image = val_generated_image
+        #     for i in range(self.n):
+        #         val_image = val_generated_image[i, :, :, :]
+        #         axes[1, i].imshow(val_image)  # cmap='gray' for omniglot
+        #     plt.show()
+        # exit()
 
         dataset = tf.data.Dataset.from_generator(
             get_task,
