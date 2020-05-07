@@ -42,7 +42,8 @@ class SML(ModelAgnosticMetaLearningModel):
             clip_gradients=False,
             experiment_name=None,
             val_seed=-1,
-            val_test_batch_norm_momentum=0.0
+            val_test_batch_norm_momentum=0.0,
+            target_database=None
     ):
         super(SML, self).__init__(
             database=database,
@@ -66,7 +67,8 @@ class SML(ModelAgnosticMetaLearningModel):
             clip_gradients=clip_gradients,
             experiment_name=experiment_name,
             val_seed=val_seed,
-            val_test_batch_norm_momentum=val_test_batch_norm_momentum
+            val_test_batch_norm_momentum=val_test_batch_norm_momentum,
+            target_database=target_database
         )
         self.features_model = feature_model
         self.n_clusters = n_clusters
