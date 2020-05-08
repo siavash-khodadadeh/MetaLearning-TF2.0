@@ -551,7 +551,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         setattr(updated_model, 'meta_trainable_variables', variables)
 
 @name_repr('AssembledModel')
-def get_assembled_model(num_classes, ind=7, architecture=MiniImagenetModel, input_shape=(84, 84, 3)):
+def get_assembled_model(num_classes, ind=11, architecture=MiniImagenetModel, input_shape=(84, 84, 3)):
     attention_model = AttentionModel()
     attention_model = decompose_attention_model(attention_model, input_shape)
 
@@ -575,7 +575,7 @@ def run_acdml():
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=1,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
         report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
