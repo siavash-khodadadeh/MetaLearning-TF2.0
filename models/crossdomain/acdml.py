@@ -36,7 +36,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_val_dataset(self):
-        databases = [ISICDatabase(), ISICDatabase(), ISICDatabase()]
+        databases = [ISICDatabase()]
 
         val_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -120,7 +120,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
             def f(*args):
                 #  np.random.seed(42)
-                indices = np.random.choice(range(len(datasets)), size=2, replace=False)
+                indices = np.random.choice(range(len(datasets)), size=1, replace=False)
                 tr_ds = args[indices[0] * 4][0, ...]
                 tr_labels = args[indices[0] * 4 + 2][0, ...]
                 tr_domain = args[indices[0] * 4][1, ...]
@@ -173,6 +173,65 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
+
+    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
+        self.test_dataset = self.get_test_dataset(seed=seed)
+        self.load_model(iterations=iterations_to_load_from)
+
+        accs = list()
+        losses = list()
+        losses_func = self.get_losses_of_tasks_batch(
+            method='test',
+            iterations=iterations,
+            use_val_batch_statistics=use_val_batch_statistics
+        )
+        counter = 0
+        for (train_ds, train_dom, val_ds, val_dom), (train_labels, val_labels) in self.test_dataset:
+            remainder_num = self.number_of_tasks_test // 20
+            if remainder_num == 0:
+                remainder_num = 1
+            if counter % remainder_num == 0:
+                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+
+            counter += 1
+            tasks_final_accuracy, tasks_final_losses = tf.map_fn(
+                losses_func,
+                elems=(
+                    train_ds,
+                    train_dom,
+                    val_ds,
+                    val_dom,
+                    train_labels,
+                    val_labels,
+                ),
+                dtype=(tf.float32, tf.float32),
+                parallel_iterations=1
+            )
+            final_loss = tf.reduce_mean(tasks_final_losses)
+            final_acc = tf.reduce_mean(tasks_final_accuracy)
+            losses.append(final_loss)
+            accs.append(final_acc)
+
+        final_acc_mean = np.mean(accs)
+        final_acc_std = np.std(accs)
+
+        print(f'loss mean: {np.mean(losses)}')
+        print(f'loss std: {np.std(losses)}')
+        print(f'accuracy mean: {final_acc_mean}')
+        print(f'accuracy std: {final_acc_std}')
+        # Free the seed :D
+        if seed != -1:
+            np.random.seed(None)
+
+        confidence_interval = 1.96 * final_acc_std / np.sqrt(self.number_of_tasks_test)
+
+        print(
+            f'final acc: {final_acc_mean} +- {confidence_interval}'
+        )
+        print(
+            f'final acc: {final_acc_mean * 100:0.2f} +- {confidence_interval * 100:0.2f}'
+        )
+        return np.mean(accs)
 
     def initialize_network(self):
         model = self.network_cls(num_classes=self.n)
@@ -512,24 +571,24 @@ def run_acdml():
         k_val_val=15,
         k_val_test=15,
         k_test=1,
-        meta_batch_size=1,
+        meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=15000,
+        save_after_iterations=1,
         meta_learning_rate=0.001,
         report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='acdml',
+        experiment_name='acdml_11',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
 
-    acdml.train(iterations=60000)
-    # acdml.evaluate(100, seed=14)
+    acdml.train(iterations=2)
+    acdml.evaluate(100, seed=14)
 
 
 if __name__ == '__main__':
