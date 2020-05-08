@@ -587,7 +587,7 @@ def run_acdml():
         val_test_batch_norm_momentum=0.0,
     )
 
-    acdml.train(iterations=2)
+    acdml.train(iterations=60000)
     acdml.evaluate(100, seed=14)
 
 
