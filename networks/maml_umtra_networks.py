@@ -67,7 +67,7 @@ class MiniImagenetModel(tf.keras.Model):
         batch_normalized_out = self.max_pool(batch_normalized_out)
         return tf.keras.activations.relu(batch_normalized_out)
 
-    def call(self, inputs, training=False):
+    def get_features(self, inputs, training=False):
         import numpy as np
         image = inputs
         c1 = self.conv_block(image, self.conv1, self.bn1, training=training)
@@ -76,6 +76,10 @@ class MiniImagenetModel(tf.keras.Model):
         c4 = self.conv_block(c3, self.conv4, self.bn4, training=training)
         c4 = tf.reshape(c4, [-1, np.prod([int(dim) for dim in c4.get_shape()[1:]])])
         f = self.flatten(c4)
+        return f
+
+    def call(self, inputs, training=False):
+        f = self.get_features(inputs, training=training)
         out = self.dense(f)
 
         return out
