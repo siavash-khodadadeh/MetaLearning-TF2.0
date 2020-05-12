@@ -19,6 +19,7 @@ class DomainAttention(CombinedCrossDomainMetaLearning):
         da = DomainAttentionModel(
             train_dbs=self.train_databases,
             num_classes=self.n,
+            root=self._root,
             db_encoder_epochs=50,
             db_encoder_lr=0.001,
             image_shape=self.image_shape
@@ -31,9 +32,9 @@ class DomainAttention(CombinedCrossDomainMetaLearning):
 def run_domain_attention():
     train_domain_databases = [
         MiniImagenetDatabase(),
-        # OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100),
-        # DTDDatabase(),
-        # VGGFlowerDatabase()
+        OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100),
+        DTDDatabase(),
+        VGGFlowerDatabase()
     ]
     meta_train_domain_databases = [
         AirplaneDatabase(),
@@ -75,5 +76,5 @@ def run_domain_attention():
 
 
 if __name__ == '__main__':
-    tf.config.experimental_run_functions_eagerly(True)
+    # tf.config.experimental_run_functions_eagerly(True)
     run_domain_attention()
