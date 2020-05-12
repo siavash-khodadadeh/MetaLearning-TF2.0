@@ -13,19 +13,24 @@ from typing import List
 
 
 class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
-    def get_train_dataset(self):
-        databases = [
-            MiniImagenetDatabase(),
-            AirplaneDatabase(),
-            CUBDatabase(),
-            OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100),
-            DTDDatabase(),
-            FungiDatabase(),
-            VGGFlowerDatabase()
-        ]
+    def __init__(self, meta_train_databases=None, *args, **kwargs):
+        super(CombinedCrossDomainMetaLearning, self).__init__(*args, **kwargs)
+        if meta_train_databases is None:
+            self.meta_train_databases = [
+                MiniImagenetDatabase(),
+                AirplaneDatabase(),
+                CUBDatabase(),
+                OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100),
+                DTDDatabase(),
+                FungiDatabase(),
+                VGGFlowerDatabase()
+            ]
+        else:
+            self.meta_train_databases = meta_train_databases
 
+    def get_train_dataset(self):
         dataset = self.get_cross_domain_meta_learning_dataset(
-            databases=databases,
+            databases=self.meta_train_databases,
             n=self.n,
             k=self.k,
             k_validation=self.k_val_ml,

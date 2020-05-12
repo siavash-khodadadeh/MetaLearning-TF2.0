@@ -4,7 +4,7 @@ import numpy as np
 
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from databases import MiniImagenetDatabase, PlantDiseaseDatabase, ISICDatabase, AirplaneDatabase, CUBDatabase, \
-    OmniglotDatabase, DTDDatabase, FungiDatabase, VGGFlowerDatabase
+    OmniglotDatabase, DTDDatabase, FungiDatabase, VGGFlowerDatabase, EuroSatDatabase
 from databases.data_bases import Database
 from models.crossdomain.attention import MiniImagenetModel, AttentionModel, decompose_attention_model, assemble_model
 
@@ -43,7 +43,8 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             n=self.n,
             k=self.k,
             k_validation=self.k_val_val,
-            meta_batch_size=1
+            meta_batch_size=1,
+            partition='val'
         )
         val_dataset = val_dataset.repeat(-1)
         val_dataset = val_dataset.take(self.number_of_tasks_val)
@@ -51,7 +52,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return val_dataset
 
     def get_test_dataset(self, seed=-1):
-        databases = [ISICDatabase()]
+        databases = [self.target_database]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -59,7 +60,8 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             k=self.k_test,
             k_validation=self.k_val_test,
             meta_batch_size=1,
-            seed=seed
+            seed=seed,
+            partition='test'
         )
         test_dataset = test_dataset.repeat(-1)
         test_dataset = test_dataset.take(self.number_of_tasks_test)
@@ -89,12 +91,22 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             reshuffle_each_iteration: bool = True,
             seed: int = -1,
             dtype=tf.float32,  # The input dtype
+            partition='train'
     ) -> tf.data.Dataset:
         datasets = list()
         steps_per_epoch = 1000000
+        if partition == 'train':
+            attr = 'train_folders'
+        elif partition == 'val':
+            attr = 'val_folders'
+        elif partition == 'test':
+            attr = 'test_folders'
+        else:
+            raise Exception("Partition should be 'train', 'val' or 'test'.")
+
         for database in databases:
             dataset = self.get_supervised_meta_learning_dataset(
-                database.train_folders,
+                getattr(database, attr),
                 n,
                 k,
                 k_validation,
@@ -564,6 +576,7 @@ def get_assembled_model(num_classes, ind=11, architecture=MiniImagenetModel, inp
 def run_acdml():
     acdml = AttentionCrossDomainMetaLearning(
         database=None,
+        target_database=EuroSatDatabase(),
         network_cls=get_assembled_model,
         n=5,
         k=1,
