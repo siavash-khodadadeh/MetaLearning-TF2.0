@@ -12,11 +12,13 @@ class DomainAttentionModel(tf.keras.models.Model):
         train_dbs,
         db_encoder_epochs,
         db_encoder_lr,
+        root,
         image_shape=(84, 84, 3),
         *args,
         **kwargs
     ):
         super(DomainAttentionModel, self).__init__(*args, **kwargs)
+        self.root = root
         self.train_dbs = train_dbs
         self.image_shape = image_shape
         self.db_encoder_epochs = db_encoder_epochs
@@ -132,7 +134,7 @@ class DomainAttentionModel(tf.keras.models.Model):
             db_dataset = self.get_db_dataset(db)
             db_encoder = self.get_db_encoder(db_name, db_dataset, num_classes)
 
-            db_saved_models = os.path.join(db_name, 'saved_models/')
+            db_saved_models = os.path.join(self.root, db_name, 'saved_models/')
             latest_checkpoint = tf.train.latest_checkpoint(db_saved_models)
             initial_epoch = 0
             if latest_checkpoint is not None:
@@ -140,7 +142,7 @@ class DomainAttentionModel(tf.keras.models.Model):
                 db_encoder.load_weights(latest_checkpoint)
 
             tensorboard_callback = tf.keras.callbacks.TensorBoard(
-                log_dir=os.path.join(db_name, 'logs'),
+                log_dir=os.path.join(self.root, db_name, 'logs'),
                 profile_batch=0
             )
 
