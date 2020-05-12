@@ -120,8 +120,10 @@ class DomainAttentionModel(tf.keras.models.Model):
     def get_db_dataset(self, db):
         instances, instance_to_class, class_ids = db.get_all_instances(partition_name='train', with_classes=True)
         dataset = tf.data.Dataset.from_tensor_slices(instances)
-        dataset = dataset.shuffle(buffer_size=len(instances))
         dataset = dataset.map(self.get_db_process_path(db, instance_to_class, class_ids))
+        dataset = dataset.cache()
+        dataset = dataset.shuffle(buffer_size=len(instances))
+
         dataset = dataset.batch(64)
 
         return dataset
