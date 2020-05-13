@@ -26,7 +26,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.feature_networks = []
         self.perform_pre_training()
 
-        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
+        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='max_pool')
         self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
         self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
         self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
@@ -39,10 +39,10 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.attention_network_dense = tf.keras.layers.Dense(
             len(self.feature_networks),
             activation='softmax',
-            name='dense'
+            name='attention_network_dense'
         )
 
-        self.classification_dense = tf.keras.layers.Dense(num_classes, activation=None, name='dense')
+        self.classification_dense = tf.keras.layers.Dense(num_classes, activation=None, name='classification_dense')
 
     def conv_block(self, features, conv, bn=None, training=False):
         conv_out = conv(features)
@@ -67,6 +67,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         weights = tf.reduce_mean(weights, axis=0)
 
         x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
+        # sum over weighted vectors so it will be a weighted mean
         x = tf.reduce_sum(x, axis=0)
 
         return self.classification_dense(x)
@@ -82,8 +83,8 @@ class DomainAttentionModel(tf.keras.models.Model):
         network = tf.keras.models.Model(input_layer, outputs=output, name='AttentionModel')
         return network
 
-    def get_db_encoder(self, db_name, db_dataset, num_classes):
-        network = MiniImagenetModel(num_classes=num_classes)
+    def get_db_encoder(self, db_name, db_dataset, num_classes, db_index):
+        network = MiniImagenetModel(num_classes=num_classes, name=db_name + f'_{db_index}')
         network.predict(tf.zeros(shape=(1, *self.image_shape)))
         return network
 
@@ -130,13 +131,14 @@ class DomainAttentionModel(tf.keras.models.Model):
 
     def get_feature_networks(self):
         feature_networks = []
+        db_index = 0
         for db in self.train_dbs:
             db_name = str(db.__class__)[str(db.__class__).rfind('.') + 1:-2]
             num_classes = len(db.train_folders)
             db_dataset = self.get_db_dataset(db)
-            db_encoder = self.get_db_encoder(db_name, db_dataset, num_classes)
+            db_encoder = self.get_db_encoder(db_name, db_dataset, num_classes, db_index)
 
-            db_saved_models = os.path.join(self.root, db_name, 'saved_models/')
+            db_saved_models = os.path.join(self.root, 'databases_info', db_name, 'saved_models/')
             latest_checkpoint = tf.train.latest_checkpoint(db_saved_models)
             initial_epoch = 0
             if latest_checkpoint is not None:
@@ -144,12 +146,13 @@ class DomainAttentionModel(tf.keras.models.Model):
                 db_encoder.load_weights(latest_checkpoint)
 
             tensorboard_callback = tf.keras.callbacks.TensorBoard(
-                log_dir=os.path.join(self.root, db_name, 'logs'),
+                log_dir=os.path.join(self.root, 'databases_info', db_name, 'logs'),
                 profile_batch=0
             )
 
             db_encoder.compile(
                 loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
+                metrics=[tf.keras.metrics.CategoricalAccuracy()],
                 optimizer=tf.keras.optimizers.Adam(self.db_encoder_lr)
             )
 
@@ -157,7 +160,6 @@ class DomainAttentionModel(tf.keras.models.Model):
                 db_dataset,
                 epochs=self.db_encoder_epochs,
                 callbacks=[tensorboard_callback],
-                metrics=[tf.keras.metrics.Accuracy()],
                 initial_epoch=initial_epoch
             )
 

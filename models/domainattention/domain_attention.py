@@ -28,6 +28,13 @@ class DomainAttention(CombinedCrossDomainMetaLearning):
 
         return da
 
+    def get_only_outer_loop_update_layers(self):
+        only_outer_loop_update_layers = set()
+        for layer_name in ('conv1', 'conv2', 'conv3', 'conv4', 'bn1', 'bn2', 'bn3', 'bn4', 'attention_network_dense'):
+            only_outer_loop_update_layers.add(self.model.get_layer(layer_name))
+
+        return only_outer_loop_update_layers
+
 
 def run_domain_attention():
     train_domain_databases = [
@@ -42,11 +49,13 @@ def run_domain_attention():
         CUBDatabase(),
     ]
 
+    test_database = EuroSatDatabase()
+
     da = DomainAttention(
         train_databases=train_domain_databases,
         meta_train_databases=meta_train_domain_databases,
-        database=None,
-        target_database=EuroSatDatabase(),
+        database=test_database,
+        target_database=test_database,
         network_cls=None,
         image_shape=(84, 84, 3),
         n=5,
@@ -66,7 +75,7 @@ def run_domain_attention():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='domain_attention',
+        experiment_name='domain_attention_freeze_attention',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
@@ -76,5 +85,5 @@ def run_domain_attention():
 
 
 if __name__ == '__main__':
-    # tf.config.experimental_run_functions_eagerly(True)
+    tf.config.experimental_run_functions_eagerly(True)
     run_domain_attention()
