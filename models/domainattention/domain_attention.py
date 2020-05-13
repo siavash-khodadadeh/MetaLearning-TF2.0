@@ -85,5 +85,5 @@ def run_domain_attention():
 
 
 if __name__ == '__main__':
-    tf.config.experimental_run_functions_eagerly(True)
+    # tf.config.experimental_run_functions_eagerly(True)
     run_domain_attention()
