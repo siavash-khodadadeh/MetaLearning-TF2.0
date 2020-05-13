@@ -140,12 +140,14 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                     updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr] - self.lr_inner_ml * gradient)
                 else:
                     updated_model_layer.__dict__[attr] = model_layer.__dict__[attr] - self.lr_inner_ml * gradient
-                meta_trainable_variables.append(updated_model_layer.__dict__[attr])
             else:
                 if assign:
                     updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr])
                 else:
                     updated_model_layer.__dict__[attr] = model_layer.__dict__[attr]
+
+            if variable.name in gradients:
+                meta_trainable_variables.append(updated_model_layer.__dict__[attr])
 
         setattr(updated_model, 'meta_trainable_variables', meta_trainable_variables)
 
