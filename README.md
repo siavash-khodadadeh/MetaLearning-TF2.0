@@ -164,3 +164,11 @@ extracted files.
 * TRAFFIC_SIGN_RAW_DATASET_ADDRESS
 * MSCOCO_RAW_DATASET_ADDRESS
 * FUNGI_RAW_DATASET_ADDRESS
+
+### VoxCeleb
+Follow the instruction from [here](http://www.robots.ox.ac.uk/~vgg/data/voxceleb/vox1.html).
+
+We downloaded "Audio files" and used P7Zip - Desktop from Ubuntu Software to extract the dev set ZIP file.
+
+Extract both zip files into a new folder and set 
+the variable VOXCELEB_RAW_DATASEST_ADDRESS in settings to the address of that folder.

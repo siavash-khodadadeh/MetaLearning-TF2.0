@@ -210,6 +210,8 @@ class BaseModel(metaclass=SetupCaller):
         should_continue = iteration_count < iterations
         while should_continue:
             for (train_ds, val_ds), (train_labels, val_labels) in self.train_dataset:
+                # import sounddevice
+                # sounddevice.play(train_ds[0, 0, 0, ...], 16000)
                 train_acc, train_loss = self.meta_train_loop(train_ds, val_ds, train_labels, val_labels)
                 train_accuracy_metric.update_state(train_acc)
                 train_loss_metric.update_state(train_loss)
