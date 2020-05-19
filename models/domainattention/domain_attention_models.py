@@ -42,7 +42,9 @@ class DomainAttentionModel(tf.keras.models.Model):
             name='attention_network_dense'
         )
 
-        self.classification_dense = tf.keras.layers.Dense(num_classes, activation=None, name='classification_dense')
+        self.classification_dense1 = tf.keras.layers.Dense(64, activation='relu', name='classification_dense1')
+        self.classification_dense2 = tf.keras.layers.Dense(64, activation='relu', name='classification_dense2')
+        self.classification_dense3 = tf.keras.layers.Dense(num_classes, activation=None, name='classification_dense3')
 
     def conv_block(self, features, conv, bn=None, training=False):
         conv_out = conv(features)
@@ -64,13 +66,19 @@ class DomainAttentionModel(tf.keras.models.Model):
         weights = self.conv_block(weights, self.conv4, self.bn4, training=training)
         weights = self.flatten(weights)
         weights = self.attention_network_dense(weights)
-        weights = tf.reduce_mean(weights, axis=0)
+        domain_attention = False
+        if domain_attention:
+            weights = tf.reduce_mean(weights, axis=0)
+            x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
+        else:
+            x = tf.expand_dims(tf.transpose(weights), axis=2) * feature_vectors
 
-        x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
         # sum over weighted vectors so it will be a weighted mean
         x = tf.reduce_sum(x, axis=0)
 
-        return self.classification_dense(x)
+        x = self.classification_dense1(x)
+        x = self.classification_dense2(x)
+        return self.classification_dense3(x)
 
     def get_attention_network(self):
         network = MiniImagenetModel(num_classes=len(self.feature_networks))
@@ -158,18 +166,21 @@ class DomainAttentionModel(tf.keras.models.Model):
 
             db_encoder.fit(
                 db_dataset,
-                epochs=self.db_encoder_epochs,
+                epochs=self.db_encoder_epochs[db_index],
                 callbacks=[tensorboard_callback],
                 initial_epoch=initial_epoch
             )
 
-            db_encoder.save_weights(filepath=os.path.join(db_saved_models, f'{db_name}_{self.db_encoder_epochs}'))
+            db_encoder.save_weights(
+                filepath=os.path.join(db_saved_models, f'{db_name}_{self.db_encoder_epochs[db_index]}')
+            )
 
             # db_encoder = tf.keras.models.Model(
             #     inputs=db_encoder.inputs,
             #     outputs=[db_encoder.get_layer('flatten').output]
             # )
             feature_networks.append(db_encoder)
+            db_index += 1
 
         return feature_networks
 

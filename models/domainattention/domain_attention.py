@@ -9,6 +9,7 @@ from models.domainattention.domain_attention_models import DomainAttentionModel
 class DomainAttention(CombinedCrossDomainMetaLearning):
     def __init__(self, train_databases, image_shape=(84, 84, 3), *args, **kwargs):
         self.train_databases = train_databases
+        self.epochs_each_domain = [450, 50, 50, 50]
         self.image_shape = image_shape
         super(DomainAttention, self).__init__(*args, **kwargs)
 
@@ -20,7 +21,7 @@ class DomainAttention(CombinedCrossDomainMetaLearning):
             train_dbs=self.train_databases,
             num_classes=self.n,
             root=self._root,
-            db_encoder_epochs=50,
+            db_encoder_epochs=self.epochs_each_domain,
             db_encoder_lr=0.001,
             image_shape=self.image_shape
         )
@@ -75,15 +76,20 @@ def run_domain_attention():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='domain_attention_freeze_attention',
+        experiment_name='domain_attention_freeze_attention_instance',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
 
     da.train(iterations=60000)
-    da.evaluate(100, seed=14)
+    da.evaluate(50, seed=14)
 
 
 if __name__ == '__main__':
     # tf.config.experimental_run_functions_eagerly(True)
+
+    # TODO Run experiments for VAE
+    # TODO We do not need three fully connected layers
+    # TODO We have to combine features in a better way
+    # TODO Check whether attention is implemented correctly
     run_domain_attention()

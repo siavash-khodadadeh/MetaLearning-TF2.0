@@ -1,7 +1,11 @@
+import os
+
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+
+import settings
 from databases import OmniglotDatabase
 
 import matplotlib.pyplot as plt
@@ -54,83 +58,52 @@ class Sampling(layers.Layer):
 
 
 class VAE(keras.Model):
-    def __init__(self, latent_dim, database, visualization_freq, learning_rate=0.001, **kwargs):
+    def __init__(
+        self,
+        vae_name,
+        image_shape,
+        latent_dim,
+        database,
+        parser,
+        encoder,
+        decoder,
+        visualization_freq,
+        learning_rate,
+        **kwargs
+    ):
         super(VAE, self).__init__(**kwargs)
         self.latent_dim = latent_dim
         self.database = database
+        self.parser = parser
         self.visualization_freq = visualization_freq
-        self.image_shape = None
+        self.image_shape = image_shape
         self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
-        self.encoder, self.sampler = self.get_encoder()
-        self.decoder = self.get_decoder()
+        self.sampler = Sampling()
+        self.vae_name = vae_name
+        self.encoder = encoder
+        self.decoder = decoder
 
         self.loss_metric = tf.keras.metrics.Mean()
         self.reconstruction_loss_metric = tf.keras.metrics.Mean()
         self.kl_loss_metric = tf.keras.metrics.Mean()
 
-    def get_encoder(self):
-        self.image_shape = (28, 28, 1)
-        encoder_inputs = keras.Input(shape=(28, 28, 1))
-        x = layers.Conv2D(64, 3, activation=None, strides=2, padding="same", use_bias=False)(encoder_inputs)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
+    def get_vae_name(self):
+        return self.vae_name
 
-        x = layers.Conv2D(64, 3, activation=None, strides=2, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2D(64, 3, activation=None, strides=1, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2D(64, 3, activation=None, strides=1, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Flatten()(x)
-        z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
-        z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
-        sampler = Sampling()
-        z = sampler([z_mean, z_log_var])
-        encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
-        encoder.summary()
-
-        return encoder, sampler
-
-    def get_decoder(self):
-        latent_inputs = keras.Input(shape=(self.latent_dim,))
-        x = layers.Dense(7 * 7 * 64, activation="relu")(latent_inputs)
-        x = layers.Reshape((7, 7, 64))(x)
-        x = layers.Conv2DTranspose(64, 3, activation=None, strides=2, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2DTranspose(64, 3, activation=None, strides=2, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2DTranspose(64, 3, activation=None, strides=1, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        x = layers.Conv2DTranspose(64, 3, activation=None, strides=1, padding="same", use_bias=False)(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.ReLU()(x)
-
-        decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
-        decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
-        decoder.summary()
-
-        return decoder
+    def sample(self, z_mean, z_log_var):
+        return self.sampler((z_mean, z_log_var))
 
     def encode(self, item):
-        return self.encoder.predict(item)
+        z_mean, z_log_var = self.encoder(item)
+        z = self.sample(z_mean, z_log_var)
+        return z_mean, z_log_var, z
 
     def decode(self, item):
-        return self.decoder.predict(item)
+        return self.decoder(item)
 
     def call(self, inputs, training=None, mask=None):
-        z_mean, z_log_var, z = self.encoder(inputs)
+        z_mean, z_log_var = self.encoder(inputs)
+        z = self.sampler([z_mean, z_log_var])
         reconstruction = self.decoder(z)
         reconstruction_loss = tf.reduce_mean(
             keras.losses.binary_crossentropy(inputs, reconstruction)
@@ -167,19 +140,10 @@ class VAE(keras.Model):
 
         return outputs
 
-    def get_parse_function(self):
-        def parse_function(example_address):
-            image = tf.image.decode_png(tf.io.read_file(example_address))
-            image = tf.reshape(tf.image.resize(image, (28, 28)), (28, 28, 1))
-            image = tf.cast(image, tf.float32)
-
-            return image / 255.
-        return parse_function
-
     def get_dataset(self, partition='train'):
         instances = self.database.get_all_instances(partition_name=partition)
         train_dataset = tf.data.Dataset.from_tensor_slices(instances).shuffle(len(self.database.train_folders))
-        train_dataset = train_dataset.map(self.get_parse_function())
+        train_dataset = train_dataset.map(self.parser.get_parse_fn())
         train_dataset = train_dataset.batch(128)
         return train_dataset
 
@@ -190,7 +154,16 @@ class VAE(keras.Model):
         return self.get_dataset(partition='val')
 
     def load_latest_checkpoint(self, epoch_to_load_from=None):
-        latest_checkpoint = tf.train.latest_checkpoint('./vaegan_checkpoints/')
+        latest_checkpoint = tf.train.latest_checkpoint(
+            os.path.join(
+                settings.PROJECT_ROOT_ADDRESS,
+                'models',
+                'mamlvae',
+                'vae',
+                self.get_vae_name(),
+                'vae_checkpoints'
+            )
+        )
 
         if latest_checkpoint is not None:
             self.load_weights(latest_checkpoint)
@@ -209,13 +182,28 @@ class VAE(keras.Model):
 
         checkpoint_callback = CheckPointFreq(
             freq=checkpoint_freq,
-            filepath='./vaegan_checkpoints/vaegan_{epoch:02d}',
+            filepath=os.path.join(
+                settings.PROJECT_ROOT_ADDRESS,
+                'models',
+                'mamlvae',
+                'vae',
+                self.get_vae_name(),
+                'vae_checkpoints',
+                'vae_{epoch:02d}'
+            ),
             save_freq='epoch',
             save_weights_only=True,
             epochs=epochs - 1
         )
         tensorboard_callback = VisualizationCallback(
-            log_dir='./vaegan_logs/',
+            log_dir=os.path.join(
+                settings.PROJECT_ROOT_ADDRESS,
+                'models',
+                'mamlvae',
+                'vae',
+                self.get_vae_name(),
+                'vae_logs'
+            ),
             visualization_freq=self.visualization_freq
         )
 
@@ -285,22 +273,4 @@ class VAE(keras.Model):
 
             plt.show()
 
-
-def run_vae_gan():
-    database = OmniglotDatabase(random_seed=47, num_train_classes=1200, num_val_classes=100)
-    latent_dim = 20
-
-    vae = VAE(
-        latent_dim=latent_dim,
-        database=database,
-        visualization_freq=5,
-        learning_rate=0.001,
-    )
-    vae.perform_training(epochs=1000, checkpoint_freq=100)
-
-    vae.load_latest_checkpoint()
-    vae.visualize_meta_learning_task()
-
-
-if __name__ == '__main__':
-    run_vae_gan()
+        tf.random.set_seed(None)
