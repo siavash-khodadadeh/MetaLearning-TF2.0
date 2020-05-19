@@ -76,6 +76,9 @@ class SML(ModelAgnosticMetaLearningModel):
         self.input_shape = input_shape
         self.preprocess_fn = preprocess_function
 
+    def get_network_name(self):
+        return self.model.name
+
     def get_config_str(self):
         config_str = super(SML, self).get_config_str()
         config_str += f'_clusters_{self.n_clusters}'
