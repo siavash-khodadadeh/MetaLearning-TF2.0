@@ -21,6 +21,7 @@ VGG_FLOWER_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-085
 TRAFFIC_SIGN_RAW_DATASET_ADDRESS = os.path.expanduser(
     '/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/GTSRB_Final_Training_Images'
 )
+VOXCELEB_RAW_DATASEST_ADDRESS = os.path.expanduser('~/datasets/vox')
 MSCOCO_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/mscoco')
 FUNGI_RAW_DATASET_ADDRESS = os.path.expanduser('/media/siavash/62fff649-0853-464d-9b65-b50860c9b3b5/fungi')
 FLUSH_OUTPUT = True

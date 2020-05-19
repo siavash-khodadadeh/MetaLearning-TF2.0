@@ -1,14 +1,14 @@
 from models.gansampling.gan_sampling import GANSampling
-from networks.maml_umtra_networks import MiniImagenetModel
-from databases import CelebADatabase
+from networks.maml_umtra_networks import VoxCelebModel
+from databases import VoxCelebDatabase
 
 
-def run_celeba():
-    celeba_database = CelebADatabase()
+def run_voxceleb():
+    voxceleb_database = VoxCelebDatabase()
 
     gan_sampling = GANSampling(
-        database=celeba_database,
-        network_cls=MiniImagenetModel,
+        database=voxceleb_database,
+        network_cls=VoxCelebModel,
         n=5,
         k=1,
         k_val_ml=5,
@@ -27,14 +27,14 @@ def run_celeba():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='celeba_interpolation',
+        experiment_name='voxceleb_interpolation',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
-    # gan_sampling.train(iterations=60000)
+    gan_sampling.train(iterations=60000)
     gan_sampling.evaluate(iterations=50, use_val_batch_statistics=True, seed=42, iterations_to_load_from=16000)
 
 
 if __name__ == '__main__':
-    run_celeba()
+    run_voxceleb()
