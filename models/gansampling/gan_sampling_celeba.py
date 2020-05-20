@@ -27,13 +27,13 @@ def run_celeba():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='celeba_interpolation',
+        experiment_name='celeba_interpolation_rotation',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
-    # gan_sampling.train(iterations=60000)
-    gan_sampling.evaluate(iterations=50, use_val_batch_statistics=True, seed=42, iterations_to_load_from=16000)
+    gan_sampling.train(iterations=60000)
+    gan_sampling.evaluate(iterations=50, use_val_batch_statistics=True, seed=42)
 
 
 if __name__ == '__main__':

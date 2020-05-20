@@ -89,7 +89,7 @@ class GANSampling(ModelAgnosticMetaLearningModel):
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1)
             noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
 
-            new_vectors = new_vectors + (noise - new_vectors) * 0.6
+            new_vectors = new_vectors + (noise - new_vectors) * 0.4
 
             vectors.append(new_vectors)
 
@@ -134,11 +134,21 @@ class GANSampling(ModelAgnosticMetaLearningModel):
             val_ds = tf.reshape(val_ds, (self.n, self.k_val_ml, *generated_image_shape))
 
             val_ds = combine_first_two_axes(val_ds)
-            val_ds = tf_image_translate(
-                val_ds,
-                tf.random.uniform((), -5, 5, dtype=tf.int32),
-                tf.random.uniform((), -5, 5, dtype=tf.int32)
+
+            # random_num = tf.random.uniform(shape=(), minval=0, maxval=1)
+            # if random_num < 0.33:
+            angles = tf.random.uniform(
+                shape=(self.n * self.k_val_ml, ),
+                minval=tf.constant(-np.pi),
+                maxval=tf.constant(np.pi)
             )
+            val_ds = tfa.image.rotate(val_ds, angles)
+            # else:
+            #     val_ds = tf_image_translate(
+            #         val_ds,
+            #         tf.random.uniform((), -5, 5, dtype=tf.int32),
+            #         tf.random.uniform((), -5, 5, dtype=tf.int32)
+            #     )
             val_ds = tf.reshape(val_ds, (self.n, self.k_val_ml, *generated_image_shape))
 
             train_labels = np.repeat(np.arange(self.n), self.k)
@@ -148,26 +158,26 @@ class GANSampling(ModelAgnosticMetaLearningModel):
 
             yield (train_ds, val_ds), (train_labels, val_labels)
 
-        for item in get_task():
-            (generated_image, val_generated_image), (_, _) = item
-            # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
-            # generated_image = self.gan_generator.predict(input_vector)
-            generated_image = generated_image[:, 0, :, :, :]
-            generated_image = generated_image
-            fig, axes = plt.subplots(2, self.n)
-            for i in range(self.n):
-                image = generated_image[i, :, :, :]
-                axes[0, i].imshow(image)
-
-            # val_input_vector = self.generate_by_gan(class_vectors=input_vector)
-            # val_generated_image = self.gan_generator.predict(val_input_vector)
-            val_generated_image = val_generated_image[:, 0, :, :, :]
-            val_generated_image = val_generated_image
-            for i in range(self.n):
-                val_image = val_generated_image[i, :, :, :]
-                axes[1, i].imshow(val_image)  # cmap='gray' for omniglot
-            plt.show()
-        exit()
+        # for item in get_task():
+        #     (generated_image, val_generated_image), (_, _) = item
+        #     # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
+        #     # generated_image = self.gan_generator.predict(input_vector)
+        #     generated_image = generated_image[:, 0, :, :, :]
+        #     generated_image = generated_image
+        #     fig, axes = plt.subplots(2, self.n)
+        #     for i in range(self.n):
+        #         image = generated_image[i, :, :, :]
+        #         axes[0, i].imshow(image)
+        #
+        #     # val_input_vector = self.generate_by_gan(class_vectors=input_vector)
+        #     # val_generated_image = self.gan_generator.predict(val_input_vector)
+        #     val_generated_image = val_generated_image[:, 0, :, :, :]
+        #     val_generated_image = val_generated_image
+        #     for i in range(self.n):
+        #         val_image = val_generated_image[i, :, :, :]
+        #         axes[1, i].imshow(val_image)  # cmap='gray' for omniglot
+        #     plt.show()
+        # exit()
 
         dataset = tf.data.Dataset.from_generator(
             get_task,

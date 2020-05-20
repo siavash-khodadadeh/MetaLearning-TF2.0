@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from databases import MiniImagenetDatabase, ISICDatabase, ChestXRay8Database, PlantDiseaseDatabase
+from databases.meta_dataset import DTDDatabase
 
 
 def convert_str_to_img(item):
@@ -58,6 +59,7 @@ def convert_to_activaitons(imgs):
     return imgs_activations
 
 
+DTDDatabase()
 d1_imgs = get_all_instances(MiniImagenetDatabase())
 d2_imgs = get_all_instances(ISICDatabase())
 d3_imgs = get_all_instances(ChestXRay8Database())

@@ -40,10 +40,11 @@ class SimpleModel(tf.keras.Model):
 
 
 class MiniImagenetModel(tf.keras.Model):
-    name = 'MiniImagenetModel'
+    def __init__(self, num_classes, *args, **kwargs):
+        if 'name' not in kwargs:
+            kwargs['name'] = 'MiniImagenetModel'
 
-    def __init__(self, num_classes):
-        super(MiniImagenetModel, self).__init__(name='mini_imagenet_model')
+        super(MiniImagenetModel, self).__init__(*args, **kwargs)
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
         self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
         self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
@@ -67,7 +68,7 @@ class MiniImagenetModel(tf.keras.Model):
         batch_normalized_out = self.max_pool(batch_normalized_out)
         return tf.keras.activations.relu(batch_normalized_out)
 
-    def call(self, inputs, training=False):
+    def get_features(self, inputs, training=False):
         import numpy as np
         image = inputs
         c1 = self.conv_block(image, self.conv1, self.bn1, training=training)
@@ -76,6 +77,10 @@ class MiniImagenetModel(tf.keras.Model):
         c4 = self.conv_block(c3, self.conv4, self.bn4, training=training)
         c4 = tf.reshape(c4, [-1, np.prod([int(dim) for dim in c4.get_shape()[1:]])])
         f = self.flatten(c4)
+        return f
+
+    def call(self, inputs, training=False):
+        f = self.get_features(inputs, training=training)
         out = self.dense(f)
 
         return out

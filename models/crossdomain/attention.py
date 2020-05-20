@@ -155,7 +155,11 @@ def assemble_model(attention, solver, ind, inner_trainable=False):
         output = layers[i](output)
         setattr(layers[i], 'inner_trainable', True)
 
-    assembled_model = tf.keras.models.Model(inputs=[attention.input, solver.input], outputs=output, name='AssembledModel')
+    assembled_model = tf.keras.models.Model(
+        inputs=[attention.input, solver.input],
+        outputs=output,
+        name='AssembledModel'
+    )
 
     for layer in assembled_model.layers:
         if not hasattr(layer, 'inner_trainable'):

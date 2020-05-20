@@ -83,11 +83,17 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             if isinstance(layer, tf.keras.layers.BatchNormalization):
                 layer.momentum = self.val_test_batch_norm_momentum
 
+        self.only_outer_loop_update_layers = self.get_only_outer_loop_update_layers()
+
     def initialize_network(self):
         model = self.network_cls(num_classes=self.n)
         model(tf.zeros(shape=(1, *self.database.input_shape)))
         model.summary()
         return model
+
+    def get_only_outer_loop_update_layers(self):
+        """Returns a set of layers which should be updated only in outer loop"""
+        return set()
 
     def get_network_name(self):
         if self.network_cls is not None:
@@ -109,6 +115,44 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return outer_gradients
 
     def create_meta_model(self, updated_model, model, gradients, assign=False):
+        """Assume that there is no two layers with the same name. If the names are being added by one by tensorflow
+        this will result in bad behavior. For example: if there is a layer named conv and another layer named conv
+        Tensorflow will name them conv_0 and conv_1 and then in updated models these will be conv_2 and conv_3, and
+        so on. This will result in failure in this method. In order to resolve this make sure that you give different
+        names to each layer to your model."""
+        meta_trainable_variables = list()
+
+        gradients = {variable.name: gradient for variable, gradient in zip(self.model.trainable_variables, gradients)}
+
+        for variable in self.model.variables:
+            references = self.extract_variable_reference_from_variable_name(variable.name)
+            layer_names = references[:-1]
+            attr = references[-1]
+
+            model_layer = model
+            updated_model_layer = updated_model
+            for layer_name in layer_names:
+                model_layer = model_layer.get_layer(layer_name)
+                updated_model_layer = updated_model_layer.get_layer(layer_name)
+
+            if variable.name in gradients and model_layer not in self.only_outer_loop_update_layers:
+                gradient = gradients[variable.name]
+                if assign:
+                    updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr] - self.lr_inner_ml * gradient)
+                else:
+                    updated_model_layer.__dict__[attr] = model_layer.__dict__[attr] - self.lr_inner_ml * gradient
+            else:
+                if assign:
+                    updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr])
+                else:
+                    updated_model_layer.__dict__[attr] = model_layer.__dict__[attr]
+
+            if variable.name in gradients:
+                meta_trainable_variables.append(updated_model_layer.__dict__[attr])
+
+        setattr(updated_model, 'meta_trainable_variables', meta_trainable_variables)
+
+    def create_meta_model_deprecated(self, updated_model, model, gradients, assign=False):
         k = 0
         variables = list()
         # TODO Maybe get layers by name
@@ -170,13 +214,25 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         )
         return loss
 
+    def extract_variable_reference_from_variable_name(self, variable_name):
+        parts = variable_name.split('/')
+        if parts[0] == self.model.name:
+            parts = parts[1:]
+
+        parts[-1] = parts[-1][:parts[-1].index(':')]
+        return parts
+
     def inner_train_loop(self, train_ds, train_labels):
+        """We assume that non trainable variables are not going to be copied at each iteration. This is due to the
+        fact that updated model is a clone of the model."""
         num_iterations = self.num_steps_ml
 
         gradients = list()
+
         for variable in self.model.trainable_variables:
             gradients.append(tf.zeros_like(variable))
 
+        # self.create_meta_model_deprecated(self.updated_models[0], self.model, gradients)
         self.create_meta_model(self.updated_models[0], self.model, gradients)
 
         for k in range(1, num_iterations + 1):
@@ -185,6 +241,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 logits = self.updated_models[k - 1](train_ds, training=True)
                 loss = self.inner_loss(train_labels, logits)
             gradients = train_tape.gradient(loss, self.updated_models[k - 1].meta_trainable_variables)
+            # self.create_meta_model_deprecated(self.updated_models[k], self.updated_models[k - 1], gradients)
             self.create_meta_model(self.updated_models[k], self.updated_models[k - 1], gradients)
 
         return self.updated_models[-1]
