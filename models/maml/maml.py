@@ -88,6 +88,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
     def initialize_network(self):
         model = self.network_cls(num_classes=self.n)
         model(tf.zeros(shape=(1, *self.database.input_shape)))
+        model.summary()
         return model
 
     def get_only_outer_loop_update_layers(self):
@@ -158,8 +159,11 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         for i in range(len(model.layers)):
             if model.layers[i].trainable:
-                if (isinstance(model.layers[i], tf.keras.layers.Conv2D) or
-                        isinstance(model.layers[i], tf.keras.layers.Dense)):
+                if (
+                        isinstance(model.layers[i], tf.keras.layers.Conv2D) or
+                        isinstance(model.layers[i], tf.keras.layers.Dense) or
+                        isinstance(model.layers[i], tf.keras.layers.Conv1D)
+                ):
                     if assign:
                         updated_model.layers[i].kernel.assign(model.layers[i].kernel - self.lr_inner_ml * gradients[k])
                     else:
