@@ -47,6 +47,25 @@ class VisualizationCallback(tf.keras.callbacks.TensorBoard):
                     tf.summary.image(name='x^', data=new_item, step=epoch, max_outputs=5)
 
 
+class AudioCallback(tf.keras.callbacks.TensorBoard):
+    def __init__(self, visualization_freq=1, *args, **kwargs):
+        super(AudioCallback, self).__init__(*args, **kwargs)
+        self.visualization_freq = visualization_freq
+
+    def on_epoch_end(self, epoch, logs=None):
+        super(AudioCallback, self).on_epoch_end(epoch, logs)
+        if epoch != 0 and epoch % self.visualization_freq == 0:
+            vae = self.model
+            for item in vae.get_train_dataset().take(1):
+                z_mean, z_log_var, z = vae.encode(item)
+                new_item = vae.decode(z)
+
+                writer = self._get_writer(self._train_run_name)
+                with writer.as_default():
+                    tf.summary.audio(name='x', data=item, sample_rate=16000, step=epoch, max_outputs=5)
+                    tf.summary.audio(name='x^', data=new_item, step=epoch, sample_rate=16000, max_outputs=5)
+
+
 class Sampling(layers.Layer):
     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
     def call(self, inputs):
@@ -172,7 +191,7 @@ class VAE(keras.Model):
 
         return -1
 
-    def perform_training(self, epochs, checkpoint_freq=100):
+    def perform_training(self, epochs, checkpoint_freq=100, vis_callback_cls=None):
         initial_epoch = self.load_latest_checkpoint()
         if initial_epoch != -1:
             print(f'Continue training from epoch {initial_epoch}.')
@@ -195,7 +214,10 @@ class VAE(keras.Model):
             save_weights_only=True,
             epochs=epochs - 1
         )
-        tensorboard_callback = VisualizationCallback(
+        if vis_callback_cls is None:
+            vis_callback_cls = VisualizationCallback
+
+        tensorboard_callback = vis_callback_cls(
             log_dir=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
