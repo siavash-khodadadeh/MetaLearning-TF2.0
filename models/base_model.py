@@ -135,6 +135,8 @@ class BaseModel(metaclass=SetupCaller):
                 print(f'==================\nResuming Training\n======={iteration_count}=======\n==================')
             except Exception as e:
                 print('Could not load the previous checkpoint!')
+                print(e)
+                exit()
 
         else:
             print('No previous checkpoint found!')
@@ -324,16 +326,24 @@ class BaseModel(metaclass=SetupCaller):
             losses.append(final_loss)
             accs.append(final_acc)
 
+        final_acc_mean = np.mean(accs)
+        final_acc_std = np.std(accs)
+
         print(f'loss mean: {np.mean(losses)}')
         print(f'loss std: {np.std(losses)}')
-        print(f'accuracy mean: {np.mean(accs)}')
-        print(f'accuracy std: {np.std(accs)}')
+        print(f'accuracy mean: {final_acc_mean}')
+        print(f'accuracy std: {final_acc_std}')
         # Free the seed :D
         if seed != -1:
             np.random.seed(None)
 
+        confidence_interval = 1.96 * final_acc_std / np.sqrt(self.number_of_tasks_test)
+
         print(
-            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+            f'final acc: {final_acc_mean} +- {confidence_interval}'
+        )
+        print(
+            f'final acc: {final_acc_mean * 100:0.2f} +- {confidence_interval * 100:0.2f}'
         )
         return np.mean(accs)
 

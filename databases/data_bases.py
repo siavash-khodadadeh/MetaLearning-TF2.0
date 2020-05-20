@@ -48,7 +48,7 @@ class Database(ABC):
     def get_input_shape(self) -> Tuple[int, int, int]:
         return self.input_shape
 
-    def get_all_instances(self, partition_name='all'):
+    def get_all_instances(self, partition_name='all', with_classes=False):
         """Return all instances of a partition of dataset
         Partition can be 'train', 'val', 'test' or 'all'
         """
@@ -64,9 +64,21 @@ class Database(ABC):
         else:
             raise Exception('The argument partition_name should be all, val, test or train.')
 
+        instance_to_class = dict()
+        class_ids = dict()
+        class_id = 0
         for partition in partitions:
             for class_name, items in partition.items():
-                instances.extend(items)
+                if class_name not in class_ids:
+                    class_ids[class_name] = class_id
+                    class_id += 1
+
+                for item in items:
+                    instances.append(item)
+                    instance_to_class[item] = class_name
+
+        if with_classes:
+            return instances, instance_to_class, class_ids
 
         return instances
 
