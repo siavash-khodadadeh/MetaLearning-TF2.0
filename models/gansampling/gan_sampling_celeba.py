@@ -27,7 +27,7 @@ def run_celeba():
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='celeba_interpolation_rotation',
+        experiment_name='celeba_noise_rotation_std_1.2',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )

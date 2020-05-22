@@ -28,6 +28,9 @@ class GANSampling(ModelAgnosticMetaLearningModel):
         self.gan_checkpoint_dir = './training_checkpoints'
         self.gan_checkpoint_prefix = os.path.join(self.gan_checkpoint_dir, "ckpt")
 
+    def get_network_name(self):
+        return self.model.name
+
     # def get_parse_function(self):
     #     return self.get_gan_parse_function()
 
@@ -59,7 +62,7 @@ class GANSampling(ModelAgnosticMetaLearningModel):
 
         return vectors
 
-    def generate_all_vectors(self, latent_dim, method='interpolation'):
+    def generate_all_vectors(self, latent_dim, method='by_class'):
         if method == 'by_class':
             return self.generate_all_vectors_by_class_vectors(latent_dim)
         elif method == 'interpolation':
@@ -111,55 +114,69 @@ class GANSampling(ModelAgnosticMetaLearningModel):
             transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
             return tfa.image.transform(images, transforms, interpolation)
 
+        @tf.function
+        def get_images_from_vectors(vectors):
+            return self.gan_generator(vectors)['default']
+
+        train_labels = np.repeat(np.arange(self.n), self.k)
+        train_labels = tf.one_hot(train_labels, depth=self.n)
+        train_labels = np.stack([train_labels] * self.meta_batch_size)
+        val_labels = np.repeat(np.arange(self.n), self.k_val_ml)
+        val_labels = tf.one_hot(val_labels, depth=self.n)
+        val_labels = np.stack([val_labels] * self.meta_batch_size)
+
+        latent_dim = 512  # 100 for omniglot
+        generated_image_shape = (84, 84, 3)  # (28, 28, 1) for omniglot
+
         def get_task():
-            # return (train_ds, val_ds), (train_labels, val_labels)
-            latent_dim = 512  # 100 for omniglot
-            generated_image_shape = (84, 84, 3)  # (28, 28, 1) for omniglot
+            meta_batch_vectors = list()
 
-            vectors = self.generate_all_vectors(latent_dim)
+            for meta_batch in range(self.meta_batch_size):
+                vectors = self.generate_all_vectors(latent_dim)
+                vectors = tf.reshape(tf.stack(vectors, axis=0), (-1, latent_dim))
+                meta_batch_vectors.append(vectors)
 
-            vectors = tf.reshape(tf.stack(vectors, axis=0), (-1, latent_dim))
-            # images = self.gan_generator.predict(vectors)
-            images = self.gan_generator(vectors)['default']
+            meta_batch_vectors = tf.stack(meta_batch_vectors)
+            meta_batch_vectors = combine_first_two_axes(meta_batch_vectors)
+            images = get_images_from_vectors(meta_batch_vectors)
             images = tf.image.resize(images, (84, 84))
+            images = tf.reshape(images, (self.meta_batch_size, self.n * (self.k + self.k_val_ml), *generated_image_shape))
 
-            train_ds = images[:self.n * self.k]
+            train_ds = images[:, :self.n * self.k, ...]
             train_indices = [i // self.k + i % self.k * self.n for i in range(self.n * self.k)]
-            train_ds = tf.gather(train_ds, train_indices, axis=0)
-            train_ds = tf.reshape(train_ds, (self.n, self.k, *generated_image_shape))
+            train_ds = tf.gather(train_ds, train_indices, axis=1)
+            train_ds = tf.reshape(train_ds, (self.meta_batch_size, self.n, self.k, *generated_image_shape))
 
-            val_ds = images[self.n * self.k:]
-            val_indices = [i // self.k_val_ml + i % self.k_val_ml * self.n for i in range(self.n * self.k_val_ml)]
-            val_ds = tf.gather(val_ds, val_indices, axis=0)
-            val_ds = tf.reshape(val_ds, (self.n, self.k_val_ml, *generated_image_shape))
-
+            val_ds = images[:, self.n * self.k:, ...]
             val_ds = combine_first_two_axes(val_ds)
 
-            # random_num = tf.random.uniform(shape=(), minval=0, maxval=1)
-            # if random_num < 0.33:
-            angles = tf.random.uniform(
-                shape=(self.n * self.k_val_ml, ),
-                minval=tf.constant(-np.pi),
-                maxval=tf.constant(np.pi)
-            )
-            val_ds = tfa.image.rotate(val_ds, angles)
-            # else:
-            #     val_ds = tf_image_translate(
-            #         val_ds,
-            #         tf.random.uniform((), -5, 5, dtype=tf.int32),
-            #         tf.random.uniform((), -5, 5, dtype=tf.int32)
-            #     )
-            val_ds = tf.reshape(val_ds, (self.n, self.k_val_ml, *generated_image_shape))
+            random_num = tf.random.uniform(shape=(), minval=0, maxval=1)
+            if random_num < 4:
+                angles = tf.random.uniform(
+                    shape=(self.meta_batch_size * self.n * self.k_val_ml, ),
+                    minval=tf.constant(-np.pi),
+                    maxval=tf.constant(np.pi)
+                )
+                val_ds = tfa.image.rotate(val_ds, angles)
+            else:
+                val_ds = tf_image_translate(
+                    val_ds,
+                    tf.random.uniform((), -5, 5, dtype=tf.int32),
+                    tf.random.uniform((), -5, 5, dtype=tf.int32)
+                )
 
-            train_labels = np.repeat(np.arange(self.n), self.k)
-            val_labels = np.repeat(np.arange(self.n), self.k_val_ml)
-            train_labels = tf.one_hot(train_labels, depth=self.n)
-            val_labels = tf.one_hot(val_labels, depth=self.n)
+            val_ds = tf.reshape(val_ds, (self.meta_batch_size, self.n * self.k_val_ml, *generated_image_shape))
+
+            val_indices = [i // self.k_val_ml + i % self.k_val_ml * self.n for i in range(self.n * self.k_val_ml)]
+            val_ds = tf.gather(val_ds, val_indices, axis=1)
+            val_ds = tf.reshape(val_ds, (self.meta_batch_size, self.n, self.k_val_ml, *generated_image_shape))
 
             yield (train_ds, val_ds), (train_labels, val_labels)
 
         # for item in get_task():
         #     (generated_image, val_generated_image), (_, _) = item
+        #     generated_image = generated_image[0, ...]
+        #     val_generated_image = val_generated_image[0, ...]
         #     # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
         #     # generated_image = self.gan_generator.predict(input_vector)
         #     generated_image = generated_image[:, 0, :, :, :]
@@ -183,10 +200,13 @@ class GANSampling(ModelAgnosticMetaLearningModel):
             get_task,
             output_types=((tf.float32, tf.float32), (tf.float32, tf.float32))
         )
-        dataset = dataset.repeat(self.meta_batch_size)
-        dataset = dataset.batch(batch_size=self.meta_batch_size)
+        # dataset = dataset.repeat(self.meta_batch_size)
+        # dataset = dataset.repeat(-1)
+        # dataset = dataset.batch(batch_size=self.meta_batch_size)
+        # steps_per_epoch = 50
+        # dataset = dataset.take(50)
+        # dataset = dataset.prefetch(5)
         steps_per_epoch = 1
-        dataset = dataset.take(1)
 
         # for i in range(1):
         #     for item in dataset:

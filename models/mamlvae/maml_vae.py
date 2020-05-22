@@ -10,6 +10,9 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
         super(MAML_VAE, self).__init__(*args, **kwargs)
         self.vae = vae
 
+    def get_network_name(self):
+        return self.model.name
+
     def get_parse_function(self):
         return self.vae.parser.get_parse_fn()
 

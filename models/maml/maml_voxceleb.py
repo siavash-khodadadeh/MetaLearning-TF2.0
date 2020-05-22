@@ -5,7 +5,7 @@ from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import VoxCelebModel
 
 
-def run_dtd():
+def run_voxceleb():
     voxceleb_database = VoxCelebDatabase()
     maml = ModelAgnosticMetaLearningModel(
         database=voxceleb_database,
@@ -39,4 +39,4 @@ def run_dtd():
 
 if __name__ == '__main__':
     # tf.config.experimental_run_functions_eagerly(True)
-    run_dtd()
+    run_voxceleb()
