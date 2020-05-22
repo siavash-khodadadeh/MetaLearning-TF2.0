@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from models.sml.sml import SML
 from networks.maml_umtra_networks import MiniImagenetModel
-from databases import CelebADatabase
+from databases import CelebADatabase, LFWDatabase
 
 
 def run_celeba():
@@ -12,6 +12,7 @@ def run_celeba():
 
     sml = SML(
         database=celeba_database,
+        target_database=LFWDatabase(),
         network_cls=MiniImagenetModel,
         n=5,
         k=1,
