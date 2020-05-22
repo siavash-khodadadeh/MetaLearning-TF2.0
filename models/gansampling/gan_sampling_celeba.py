@@ -20,19 +20,19 @@ def run_celeba():
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=1000,
+        save_after_iterations=2000,
         meta_learning_rate=0.001,
-        report_validation_frequency=50,
-        log_train_images_after_iteration=250,
+        report_validation_frequency=250,
+        log_train_images_after_iteration=1000,
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=True,
-        experiment_name='celeba_noise_rotation_std_1.2',
+        experiment_name='celeba_noise_std_1.2',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
-    gan_sampling.train(iterations=60000)
+    gan_sampling.train(iterations=20000)
     gan_sampling.evaluate(iterations=50, use_val_batch_statistics=True, seed=42)
 
 

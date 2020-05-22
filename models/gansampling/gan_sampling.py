@@ -150,20 +150,20 @@ class GANSampling(ModelAgnosticMetaLearningModel):
             val_ds = images[:, self.n * self.k:, ...]
             val_ds = combine_first_two_axes(val_ds)
 
-            random_num = tf.random.uniform(shape=(), minval=0, maxval=1)
-            if random_num < 4:
-                angles = tf.random.uniform(
-                    shape=(self.meta_batch_size * self.n * self.k_val_ml, ),
-                    minval=tf.constant(-np.pi),
-                    maxval=tf.constant(np.pi)
-                )
-                val_ds = tfa.image.rotate(val_ds, angles)
-            else:
-                val_ds = tf_image_translate(
-                    val_ds,
-                    tf.random.uniform((), -5, 5, dtype=tf.int32),
-                    tf.random.uniform((), -5, 5, dtype=tf.int32)
-                )
+            # random_num = tf.random.uniform(shape=(), minval=0, maxval=1)
+            # if random_num < 4:
+            #     angles = tf.random.uniform(
+            #         shape=(self.meta_batch_size * self.n * self.k_val_ml, ),
+            #         minval=tf.constant(-np.pi),
+            #         maxval=tf.constant(np.pi)
+            #     )
+            #     val_ds = tfa.image.rotate(val_ds, angles)
+            # else:
+            #     val_ds = tf_image_translate(
+            #         val_ds,
+            #         tf.random.uniform((), -5, 5, dtype=tf.int32),
+            #         tf.random.uniform((), -5, 5, dtype=tf.int32)
+            #     )
 
             val_ds = tf.reshape(val_ds, (self.meta_batch_size, self.n * self.k_val_ml, *generated_image_shape))
 
@@ -173,28 +173,28 @@ class GANSampling(ModelAgnosticMetaLearningModel):
 
             yield (train_ds, val_ds), (train_labels, val_labels)
 
-        # for item in get_task():
-        #     (generated_image, val_generated_image), (_, _) = item
-        #     generated_image = generated_image[0, ...]
-        #     val_generated_image = val_generated_image[0, ...]
-        #     # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
-        #     # generated_image = self.gan_generator.predict(input_vector)
-        #     generated_image = generated_image[:, 0, :, :, :]
-        #     generated_image = generated_image
-        #     fig, axes = plt.subplots(2, self.n)
-        #     for i in range(self.n):
-        #         image = generated_image[i, :, :, :]
-        #         axes[0, i].imshow(image)
-        #
-        #     # val_input_vector = self.generate_by_gan(class_vectors=input_vector)
-        #     # val_generated_image = self.gan_generator.predict(val_input_vector)
-        #     val_generated_image = val_generated_image[:, 0, :, :, :]
-        #     val_generated_image = val_generated_image
-        #     for i in range(self.n):
-        #         val_image = val_generated_image[i, :, :, :]
-        #         axes[1, i].imshow(val_image)  # cmap='gray' for omniglot
-        #     plt.show()
-        # exit()
+        for item in get_task():
+            (generated_image, val_generated_image), (_, _) = item
+            generated_image = generated_image[0, ...]
+            val_generated_image = val_generated_image[0, ...]
+            # input_vector = tf.random.normal([self.n, 100], mean=0, stddev=1)
+            # generated_image = self.gan_generator.predict(input_vector)
+            generated_image = generated_image[:, 0, :, :, :]
+            generated_image = generated_image
+            fig, axes = plt.subplots(2, self.n)
+            for i in range(self.n):
+                image = generated_image[i, :, :, :]
+                axes[0, i].imshow(image)
+
+            # val_input_vector = self.generate_by_gan(class_vectors=input_vector)
+            # val_generated_image = self.gan_generator.predict(val_input_vector)
+            val_generated_image = val_generated_image[:, 0, :, :, :]
+            val_generated_image = val_generated_image
+            for i in range(self.n):
+                val_image = val_generated_image[i, :, :, :]
+                axes[1, i].imshow(val_image)  # cmap='gray' for omniglot
+            plt.show()
+        exit()
 
         dataset = tf.data.Dataset.from_generator(
             get_task,
