@@ -94,7 +94,8 @@ class SML(ModelAgnosticMetaLearningModel):
         all_files = list()
 
         for class_name in self.database.train_folders:
-            all_files.extend([os.path.join(class_name, file_name) for file_name in os.listdir(class_name)])
+            # all_files.extend([os.path.join(class_name, file_name) for file_name in os.listdir(class_name)])
+            all_files.extend(self.database.train_folders[class_name])
 
         n = len(all_files)
         m = self.feature_size

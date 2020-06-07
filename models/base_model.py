@@ -235,7 +235,7 @@ class BaseModel(metaclass=SetupCaller):
 
                 if iteration_count % self.report_validation_frequency == 0:
                     self.report_validation_loss_and_accuracy(iteration_count)
-                    if epoch_count != 0:
+                    if iteration_count != 0:
                         print('Train Loss: {}'.format(train_loss_metric.result().numpy()))
                         print('Train Accuracy: {}'.format(train_accuracy_metric.result().numpy()))
                     with self.train_summary_writer.as_default():
