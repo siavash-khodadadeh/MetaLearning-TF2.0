@@ -1,5 +1,5 @@
 import os
-from typing import Tuple, List, Callable
+from typing import Tuple, List, Callable, Dict
 import itertools
 import shutil
 
@@ -12,7 +12,7 @@ from .data_bases import Database
 
 
 class CelebADatabase(Database):
-    def get_train_val_test_partition(self) -> Tuple[List[str], List[str], List[str]]:
+    def get_train_val_test_partition(self) -> Dict:
         train_val_test_partition = dict()
         with open(os.path.join(settings.CELEBA_RAW_DATA_ADDRESS, 'list_eval_partition.txt')) as list_eval_partition:
             for line in list_eval_partition:
@@ -25,7 +25,16 @@ class CelebADatabase(Database):
                     train_val_test_partition[line_data[0]] = 'test'
         return train_val_test_partition
 
-    def get_attributes_task_dataset(self, partition, k, meta_batch_size):
+    def get_attributes_task_dataset(
+            self,
+            partition,
+            k,
+            k_val,
+            meta_batch_size,
+            parse_fn,
+            seed,
+            default_shape=(84, 84, 3)
+    ):
         self.make_attributes_task_dataset()
         tasks_base_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'data/celeba/attributes_task', partition)
 
@@ -39,27 +48,51 @@ class CelebADatabase(Database):
             positive_lines = tf.strings.split(tf.io.read_file(file_address), '\n')[:-1]
             negative_lines = tf.strings.split(tf.io.read_file(negative_task_address), '\n')[:-1]
 
-            positive_lines = tf.random.shuffle(positive_lines)
-            negative_lines = tf.random.shuffle(negative_lines)
-            positive_lines = positive_lines[:2 * k]
-            negative_lines = negative_lines[:2 * k]
+            # TODO replace this with choose instead of shuffle
+            positive_lines = tf.random.shuffle(positive_lines, seed=seed)
+            negative_lines = tf.random.shuffle(negative_lines, seed=seed)
 
-            return tf.concat((positive_lines[:k], negative_lines[:k], positive_lines[k:], negative_lines[k:]), axis=0)
+            return (
+                (
+                    tf.reshape(
+                        tf.map_fn(
+                            parse_fn,
+                            tf.reshape(tf.concat((positive_lines[:k], negative_lines[:k]), axis=0), (-1, 1)),
+                            dtype=tf.float32
+                        ),
+                        (2, k, *default_shape)
+                    ),
+                    tf.reshape(
+                        tf.map_fn(
+                            parse_fn,
+                            tf.reshape(
+                                tf.concat((positive_lines[k:k + k_val], negative_lines[k:k + k_val]), axis=0), (-1, 1)
+                            ),
+                            dtype=tf.float32
+                        ),
+                        (2, k_val, *default_shape)
+                    ),
+                ),
+                (
+                    tf.one_hot(
+                        tf.concat((tf.zeros(shape=(k,), dtype=tf.int32), tf.ones(shape=(k,), dtype=tf.int32)), axis=0),
+                        depth=2
+                    ),
+                    tf.one_hot(
+                        tf.concat(
+                            (tf.zeros(shape=(k_val,), dtype=tf.int32), tf.ones(shape=(k_val,), dtype=tf.int32)), axis=0
+                        ),
+                        depth=2
+                    ),
+                )
+            )
 
         all_tasks = os.listdir(tasks_base_address)
         dataset = tf.data.Dataset.from_tensor_slices(all_tasks)
+        dataset = dataset.shuffle(len(all_tasks), seed=seed)
         dataset = dataset.map(get_images_from_task_file)
-        dataset = dataset.unbatch()
 
         steps_per_epoch = len(all_tasks) // meta_batch_size
-        labels_dataset = self.make_labels_dataset(2, k, meta_batch_size, steps_per_epoch, True)
-
-        dataset = dataset.map(self._get_parse_function(), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-
-        dataset = dataset.batch(k, drop_remainder=False)
-        dataset = dataset.batch(2, drop_remainder=True)
-        dataset = dataset.batch(2, drop_remainder=True)
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)

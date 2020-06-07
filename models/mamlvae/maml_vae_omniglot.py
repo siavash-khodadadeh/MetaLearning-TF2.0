@@ -92,13 +92,14 @@ if __name__ == '__main__':
     maml_vae = MAML_VAE(
         vae=vae,
         database=omniglot_database,
+        latent_algorithm='p3',
         network_cls=SimpleModel,
         n=5,
         k=1,
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=5,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.4,
@@ -110,7 +111,7 @@ if __name__ == '__main__':
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=False,
-        experiment_name='omniglot_std_1.0',
+        experiment_name='omniglot_vae_0.6',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
