@@ -2,9 +2,50 @@ import tensorflow as tf
 
 from models.base_model import BaseModel
 from networks.proto_networks import SimpleModelProto, VGGSmallModel
-from databases import OmniglotDatabase, VGGFace2Database
+from databases import OmniglotDatabase, VGGFace2Database, CelebADatabase
 from utils import combine_first_two_axes
 
+class MiniImagenetModel(tf.keras.Model):
+    name = 'MiniImagenetModel'
+    def __init__(self, *args, **kwargs):
+
+        super(MiniImagenetModel, self).__init__(*args, **kwargs)
+        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
+        self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
+        self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
+        # self.bn1 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn1')
+        self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
+        self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
+        # self.bn2 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn2')
+        self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
+        self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
+        # self.bn3 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn3')
+        self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
+        self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
+        # self.bn4 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn4')
+        self.flatten = tf.keras.layers.Flatten(name='flatten')
+
+    def conv_block(self, features, conv, bn=None, training=False):
+        conv_out = conv(features)
+        batch_normalized_out = bn(conv_out, training=training)
+        batch_normalized_out = self.max_pool(batch_normalized_out)
+        return tf.keras.activations.relu(batch_normalized_out)
+
+    def get_features(self, inputs, training=False):
+        import numpy as np
+        image = inputs
+        c1 = self.conv_block(image, self.conv1, self.bn1, training=training)
+        c2 = self.conv_block(c1, self.conv2, self.bn2, training=training)
+        c3 = self.conv_block(c2, self.conv3, self.bn3, training=training)
+        c4 = self.conv_block(c3, self.conv4, self.bn4, training=training)
+        c4 = tf.reshape(c4, [-1, np.prod([int(dim) for dim in c4.get_shape()[1:]])])
+        f = self.flatten(c4)
+        return f
+
+    def call(self, inputs, training=False):
+        out = self.get_features(inputs, training=training)
+
+        return out
 
 class PrototypicalNetworks(BaseModel):
     def __init__(
@@ -74,7 +115,7 @@ class PrototypicalNetworks(BaseModel):
         if method == 'train':
             return self.get_loss_func(training=True, k=self.k)
         elif method == 'val':
-            return self.get_loss_func(training=True, k=self.k)
+            return self.get_loss_func(training=True, k=self.k_val_train)
         elif method == 'test':
             return self.get_loss_func(training=kwargs['use_val_batch_statistics'], k=self.k_test)
 
@@ -133,48 +174,50 @@ def run_omniglot():
         database=omniglot_database,
         network_cls=SimpleModelProto,
         n=5,
-        k=5,
+        k=1,
         k_val_ml=5,
         k_val_val=15,
+        k_val_train=None,
         k_val_test=15,
-        k_test=3,
-        meta_batch_size=32,
+        k_test=5,
+        meta_batch_size=4,
         save_after_iterations=1000,
         meta_learning_rate=0.001,
-        report_validation_frequency=250,
-        log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
+        report_validation_frequency=200,
+        log_train_images_after_iteration=200,  # Set to -1 if you do not want to log train images.
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         val_seed=-1,
         experiment_name=None
     )
 
-    proto_net.train(iterations=1000)
-    # proto_net.evaluate(-1)
+    proto_net.train(iterations=5000)
+    proto_net.evaluate(-1)
 
 
 def run_celeba():
-    celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
+#     celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
     # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
-    # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
+    celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     proto_net = PrototypicalNetworks(
         database=celeba_database,
-        network_cls=VGGSmallModel,
+        network_cls=MiniImagenetModel,
         # network_cls=InceptionResNetV1,
         # network_cls=MiniImagenetModel,
         n=5,
         k=1,
         k_val_ml=5,
+        k_val_train=None,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
-        meta_batch_size=4,
-        save_after_iterations=500,
+        k_test=15,
+        meta_batch_size=32,
+        save_after_iterations=1000,
         # meta_learning_rate=0.001,
         meta_learning_rate=0.0001,
-        report_validation_frequency=500,
-        log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
+        report_validation_frequency=200,
+        log_train_images_after_iteration=200,  # Set to -1 if you do not want to log train images.
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         val_seed=42,
@@ -184,14 +227,14 @@ def run_celeba():
     # Start with 0.00005
     # From 44000 train with smaller learning rate 0.000001
     # From 59000 train with smaller learning rate 0.0000005
-    proto_net.train(iterations=90000)
-    # proto_net.evaluate(-1, seed=42)
+    proto_net.train(iterations=180000)
+    proto_net.evaluate(-1, seed=42)
 
 
 if __name__ == '__main__':
-    run_omniglot()
+#     run_omniglot()
     # run_mini_imagenet()
     # from datetime import datetime
     # begin_time = datetime.now()
-    # run_celeba()
+    run_celeba()
     # print(datetime.now() - begin_time)
