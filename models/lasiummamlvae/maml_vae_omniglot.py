@@ -3,9 +3,9 @@ from tensorflow.keras import layers
 
 from databases import OmniglotDatabase
 
-from models.mamlvae.database_parsers import OmniglotParser
-from models.mamlvae.maml_vae import MAML_VAE
-from models.mamlvae.vae import VAE
+from models.lasiummamlvae.database_parsers import OmniglotParser
+from models.lasiummamlvae.maml_vae import MAML_VAE
+from models.lasiummamlvae.vae import VAE
 from networks.maml_umtra_networks import SimpleModel
 
 

@@ -4,9 +4,9 @@ from tensorflow.keras import layers
 
 from databases import MiniImagenetDatabase
 
-from models.protonets_vae.database_parsers import MiniImagenetParser
-from models.protonets_vae.protonets_vae import ProtoNetsVAE
-from models.protonets_vae.vae import VAE, AudioCallback
+from models.lasiumprotonetsvae.database_parsers import MiniImagenetParser
+from models.lasiumprotonetsvae.protonets_vae import ProtoNetsVAE
+from models.lasiumprotonetsvae.vae import VAE, AudioCallback
 
 class MiniImagenetModel(tf.keras.Model):
     name = 'MiniImagenetModel'

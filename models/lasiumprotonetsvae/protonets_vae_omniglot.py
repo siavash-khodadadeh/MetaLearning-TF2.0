@@ -3,9 +3,9 @@ from tensorflow.keras import layers
 
 from databases import OmniglotDatabase
 
-from models.protonets_vae.database_parsers import OmniglotParser
-from models.protonets_vae.protonets_vae import ProtoNetsVAE
-from models.protonets_vae.vae import VAE
+from models.lasiumprotonetsvae.database_parsers import OmniglotParser
+from models.lasiumprotonetsvae.protonets_vae import ProtoNetsVAE
+from models.lasiumprotonetsvae.vae import VAE
 from networks.proto_networks import SimpleModelProto, VGGSmallModel
 
 import tensorflow as tf

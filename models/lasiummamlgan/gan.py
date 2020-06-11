@@ -151,7 +151,7 @@ class GAN(tf.keras.models.Model):
             os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlgan',
+                'lasiummamlgan',
                 'gan',
                 self.get_gan_name(),
                 'gan_checkpoints'
@@ -177,7 +177,7 @@ class GAN(tf.keras.models.Model):
             filepath=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlgan',
+                'lasiummamlgan',
                 'gan',
                 self.get_gan_name(),
                 'gan_checkpoints',
@@ -194,7 +194,7 @@ class GAN(tf.keras.models.Model):
             log_dir=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlgan',
+                'lasiummamlgan',
                 'gan',
                 self.get_gan_name(),
                 'gan_logs'

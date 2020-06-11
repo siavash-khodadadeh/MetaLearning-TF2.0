@@ -8,10 +8,30 @@ Install all required packages with
 
 `pip install -r requirements.txt`
 
-## Datasets
+## Running the code
+First download dataset which you want to use as described in 
+[Datasets](README.md/#Datasets) section.
 
-We support a few datasets for now. We will add more datasets eventually. Please feel free to contribute by adding new 
-datasets.
+For each experiment we have a python file to run it. 
+For example, run the following command to run MAML on Omniglot dataset.
+
+`python models/maml/maml_omniglot.py` 
+
+For LASIUM experiments you can use any of these models
+
+`python models/lasiummamlgan/mam_gan_mini_imagenet.py`
+
+`python models/lasiummamlvae/maml_vae_omniglot.py`
+
+`python models/lasiumprotonetsgan/protonets_vae_omniglot.py`
+
+`python models/lasiumprotonetsvae/protonets_gan_celeba_progan.py`
+
+Accordingly, you can run these codes on any other dataset as the 
+python runner files are provided.
+
+ 
+## Datasets
 
 ### Omniglot
 Download [this](https://www.kaggle.com/watesoyan/omniglot/downloads/Omniglot.zip/1) file and extract it into some 
@@ -87,9 +107,6 @@ Then set the value of CELEBA_RAW_DATA_ADDRESS variable in settings.py to the add
 #### CelebA Task 1 - Identity recognition
 
 #### CelebA Task 2- Attribute Assignment
-## Citation
-
-Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to publish your research.
 
 ### LFW
 http://vis-www.cs.umass.edu/lfw/lfw-deepfunneled.tgz
@@ -172,3 +189,8 @@ We downloaded "Audio files" and used P7Zip - Desktop from Ubuntu Software to ext
 
 Extract both zip files into a new folder and set 
 the variable VOXCELEB_RAW_DATASEST_ADDRESS in settings to the address of that folder.
+
+## Citation
+
+Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to 
+publish your research.

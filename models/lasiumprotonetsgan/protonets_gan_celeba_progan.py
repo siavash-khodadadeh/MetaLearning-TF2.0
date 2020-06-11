@@ -1,11 +1,12 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorflow_hub as hub
 
 from databases import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
-from models.protonets_gan.database_parsers import CelebAGANParser
-from models.protonets_gan.gan import GAN
-from models.protonets_gan.protonets_gan import ProtoNetsGAN
+from models.lasiumprotonetsgan.database_parsers import CelebAGANParser
+from models.lasiumprotonetsgan.gan import GAN
+from models.lasiumprotonetsgan.protonets_gan import ProtoNetsGAN
 
 class MiniImagenetModel(tf.keras.Model):
     name = 'MiniImagenetModel'
@@ -49,17 +50,21 @@ class MiniImagenetModel(tf.keras.Model):
 
         return out
 
+
 class ProtoNetsProGAN(ProtoNetsGAN):
     @tf.function
     def get_images_from_vectors(self, vectors):
         return self.gan(vectors)['default']
+
 
 if __name__ == '__main__':
     celeba_database = CelebADatabase()
     shape = (84, 84, 3)
     latent_dim = 512
 
-    gan = tf.saved_model.load('gan/celeba').signatures['default']
+    gan = hub.load("https://tfhub.dev/google/progan-128/1").signatures['default']
+    # you can download the module manually and load it with code below:
+    # gan = tf.saved_model.load('gan/celeba').signatures['default']
     setattr(gan, 'parser', CelebAGANParser(shape=(84, 84, 3)))
     proto_gan = ProtoNetsProGAN(
         gan=gan,
