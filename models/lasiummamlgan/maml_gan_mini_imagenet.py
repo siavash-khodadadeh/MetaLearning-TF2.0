@@ -2,9 +2,9 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 from databases import OmniglotDatabase, MiniImagenetDatabase
-from models.mamlgan.database_parsers import OmniglotParser, MiniImagenetParser
-from models.mamlgan.gan import GAN
-from models.mamlgan.maml_gan import MAMLGAN
+from models.lasiummamlgan.database_parsers import OmniglotParser, MiniImagenetParser
+from models.lasiummamlgan.gan import GAN
+from models.lasiummamlgan.maml_gan import MAMLGAN
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         d_learning_rate=0.0003,
         g_learning_rate=0.0003,
     )
-    gan.perform_training(epochs=100, checkpoint_freq=5)
+    gan.perform_training(epochs=1000, checkpoint_freq=5)
     gan.load_latest_checkpoint()
 
     maml_gan = MAMLGAN(

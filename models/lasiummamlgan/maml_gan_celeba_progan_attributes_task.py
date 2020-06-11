@@ -3,9 +3,9 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 from databases import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
-from models.mamlgan.database_parsers import OmniglotParser, MiniImagenetParser, CelebAGANParser
-from models.mamlgan.gan import GAN
-from models.mamlgan.maml_gan import MAMLGAN
+from models.lasiummamlgan.database_parsers import OmniglotParser, MiniImagenetParser, CelebAGANParser
+from models.lasiummamlgan.gan import GAN
+from models.lasiummamlgan.maml_gan import MAMLGAN
 from networks.maml_umtra_networks import MiniImagenetModel
 import tensorflow_hub as hub
 
@@ -101,18 +101,6 @@ class MAMLGANProGAN(MAMLGAN):
         test_dataset = test_dataset.repeat(-1)
         test_dataset = test_dataset.take(self.number_of_tasks_test)
 
-        # counter = 0
-        # import matplotlib.pyplot as plt
-        # for item in test_dataset:
-        #     counter += 1
-        #     (tr_ds, val_ds), (tr_lbls, val_lbls) = item
-        #     plt.imshow(tr_ds[0, 0, 0, ...])
-        #     plt.show()
-        #     print(tr_lbls)
-        #     print(val_lbls)
-        #     if counter == 5:
-        #         break
-
         setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
         return test_dataset
 
@@ -167,6 +155,6 @@ if __name__ == '__main__':
     #  20k with 1e-3
     #  70k with 5e-4
     # from 90K go with 1e-4
-    # 105K works the best
-    maml_gan.train(iterations=120000)  # remember you are on 5e-4
-    maml_gan.evaluate(50, seed=42, iterations_to_load_from=105000)  # check 47000 , 75000, 86000, 105000, 113000, 118000
+    # 105K works the best based on validation accuracy
+    maml_gan.train(iterations=120000)
+    maml_gan.evaluate(50, seed=42, iterations_to_load_from=105000)

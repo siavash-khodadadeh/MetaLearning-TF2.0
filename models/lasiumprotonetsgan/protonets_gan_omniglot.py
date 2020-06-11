@@ -2,9 +2,9 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 from databases import OmniglotDatabase
-from models.protonets_gan.database_parsers import OmniglotParser
-from models.protonets_gan.gan import GAN
-from models.protonets_gan.protonets_gan import ProtoNetsGAN
+from models.lasiumprotonetsgan.database_parsers import OmniglotParser
+from models.lasiumprotonetsgan.gan import GAN
+from models.lasiumprotonetsgan.protonets_gan import ProtoNetsGAN
 from networks.proto_networks import SimpleModelProto
 
 import tensorflow as tf

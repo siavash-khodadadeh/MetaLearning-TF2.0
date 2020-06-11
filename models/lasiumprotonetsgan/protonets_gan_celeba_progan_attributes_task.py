@@ -1,11 +1,12 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorflow_hub as hub
 
 from databases import OmniglotDatabase, MiniImagenetDatabase, CelebADatabase
-from models.protonets_gan.database_parsers import OmniglotParser, MiniImagenetParser, CelebAAttributeParser
-from models.protonets_gan.gan import GAN
-from models.protonets_gan.protonets_gan import ProtoNetsGAN
+from models.lasiumprotonetsgan.database_parsers import OmniglotParser, MiniImagenetParser, CelebAAttributeParser
+from models.lasiumprotonetsgan.gan import GAN
+from models.lasiumprotonetsgan.protonets_gan import ProtoNetsGAN
 from utils import combine_first_two_axes
 from tqdm import tqdm
 
@@ -202,18 +203,6 @@ class ProtoGANProGAN(ProtoNetsGAN):
         test_dataset = test_dataset.repeat(-1)
         test_dataset = test_dataset.take(self.number_of_tasks_test)
 
-        # counter = 0
-        # import matplotlib.pyplot as plt
-        # for item in test_dataset:
-        #     counter += 1
-        #     (tr_ds, val_ds), (tr_lbls, val_lbls) = item
-        #     plt.imshow(tr_ds[0, 0, 0, ...])
-        #     plt.show()
-        #     print(tr_lbls)
-        #     print(val_lbls)
-        #     if counter == 5:
-        #         exit()
-
         setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
         return test_dataset
 
@@ -222,7 +211,9 @@ if __name__ == '__main__':
     celeba_database = CelebADatabase()
     shape = (84, 84, 3)
     latent_dim = 512
-    gan = tf.saved_model.load('gan/celeba').signatures['default']
+    gan = hub.load("https://tfhub.dev/google/progan-128/1").signatures['default']
+    # you can download the module manually and load it with code below:
+    # gan = tf.saved_model.load('gan/celeba').signatures['default']
     setattr(gan, 'parser', CelebAAttributeParser(shape=(84, 84, 3)))
 
     proto_gan = ProtoGANProGAN(
@@ -251,31 +242,5 @@ if __name__ == '__main__':
 
     proto_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
-    # For p2 0.6
-    # 20k with 1e-3
-    # 20k with 5e-4
-    # 20k with 1e-4
-    # For p1 0.1
-    # 20k with 1e-3
-    # 25k with 5e-3
-
-#     proto_gan.train(iterations=40000, iterations_to_load_from=20000)
     proto_gan.train(iterations=60000)
     proto_gan.evaluate(-1, seed=42)
-
-# seed = 42:
-# from 44K final acc: 72.50 +- 1.07
-# from 60K 72.49 +- 1.07
-
-# seed 40742
-# from 44K final acc: 72.23 +- 1.10
-# from 60K final acc: 72.33 +- 1.07
-
-# 892736
-# final acc: 72.46 +- 1.03
-
-# 704822
-# final acc: 73.13 +- 1.09
-
-#
-# final acc: 0.7345999479293823 +- 0.010386674975700031

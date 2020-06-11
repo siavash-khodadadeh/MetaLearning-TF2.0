@@ -4,9 +4,9 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 from databases import OmniglotDatabase, MiniImagenetDatabase
-from models.mamlgan.database_parsers import OmniglotParser, MiniImagenetParser
-from models.mamlgan.gan import GAN
-from models.mamlgan.maml_gan import MAMLGAN
+from models.lasiummamlgan.database_parsers import OmniglotParser, MiniImagenetParser
+from models.lasiummamlgan.gan import GAN
+from models.lasiummamlgan.maml_gan import MAMLGAN
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 
 

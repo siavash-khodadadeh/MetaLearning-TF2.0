@@ -1,11 +1,12 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorflow_hub as hub
 
 from databases import MiniImagenetDatabase
-from models.protonets_gan.database_parsers import MiniImagenetParser
-from models.protonets_gan.gan import GAN
-from models.protonets_gan.protonets_gan import ProtoNetsGAN
+from models.lasiumprotonetsgan.database_parsers import MiniImagenetParser
+from models.lasiumprotonetsgan.gan import GAN
+from models.lasiumprotonetsgan.protonets_gan import ProtoNetsGAN
 
 class MiniImagenetModel(tf.keras.Model):
     name = 'MiniImagenetModel'
@@ -59,8 +60,10 @@ if __name__ == '__main__':
     shape = (84, 84, 3)
     latent_dim = 120
 
-    gan = tf.saved_model.load('../mamlgan/gan/mini_imagenet/bigbigan', tags=[]).signatures['generate']
-    setattr(gan, 'parser', MiniImagenetParser(shape=(84, 84, 3)))
+    gan = hub.load("https://tfhub.dev/deepmind/bigbigan-resnet50/1", tags=[]).signatures['generate']
+    setattr(gan, 'parser', MiniImagenetParser(shape=shape))
+    # gan = tf.saved_model.load('../mamlgan/gan/mini_imagenet/bigbigan', tags=[]).signatures['generate']
+    # setattr(gan, 'parser', MiniImagenetParser(shape=(84, 84, 3)))
 
     proto_gan = ProtoNetsProGAN(
         gan=gan,
@@ -88,7 +91,7 @@ if __name__ == '__main__':
 
     proto_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
-#     proto_gan.train(iterations=40000)
+    proto_gan.train(iterations=40000)
     proto_gan.evaluate(-1, seed=42, use_val_batch_statistics=False, iterations_to_load_from=30000)
 
     proto_gan.k_test = 5

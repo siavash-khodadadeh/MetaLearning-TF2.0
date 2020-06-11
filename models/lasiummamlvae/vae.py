@@ -188,7 +188,7 @@ class VAE(keras.Model):
             os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlvae',
+                'lasiummamlvae',
                 'vae',
                 self.get_vae_name(),
                 'vae_checkpoints'
@@ -215,7 +215,7 @@ class VAE(keras.Model):
             filepath=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlvae',
+                'lasiummamlvae',
                 'vae',
                 self.get_vae_name(),
                 'vae_checkpoints',
@@ -232,7 +232,7 @@ class VAE(keras.Model):
             log_dir=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlvae',
+                'lasiummamlvae',
                 'vae',
                 self.get_vae_name(),
                 'vae_logs'

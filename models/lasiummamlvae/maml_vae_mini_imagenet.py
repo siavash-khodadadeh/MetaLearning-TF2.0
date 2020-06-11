@@ -3,11 +3,11 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 from databases import CelebADatabase, MiniImagenetDatabase
-from models.mamlvae.database_parsers import MiniImagenetParser
+from models.lasiummamlvae.database_parsers import MiniImagenetParser
 
-from models.mamlvae.database_parsers import CelebAParser
-from models.mamlvae.maml_vae import MAML_VAE
-from models.mamlvae.vae import VAE, AudioCallback
+from models.lasiummamlvae.database_parsers import CelebAParser
+from models.lasiummamlvae.maml_vae import MAML_VAE
+from models.lasiummamlvae.vae import VAE, AudioCallback
 from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
 
 

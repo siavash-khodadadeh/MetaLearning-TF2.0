@@ -5,9 +5,9 @@ tqdm
 numpy
 miniimagenettools
 pandas
+tensorflow_hub
 #  Just for plots and graphs
 matplotlib
 seaborn
 # for face recognition
-face_recognition
-tensorflow_hub
+# face_recognition
