@@ -84,7 +84,7 @@ if __name__ == '__main__':
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=5,
+        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.4,
@@ -96,12 +96,12 @@ if __name__ == '__main__':
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=False,
-        experiment_name='omniglot_p2_0.6_shift',
+        experiment_name='omniglot_p1_0.5_shift_a',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
-    maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
+    # maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
-    maml_gan.train(iterations=5000)
+    maml_gan.train(iterations=1000)
     maml_gan.evaluate(50, seed=42)

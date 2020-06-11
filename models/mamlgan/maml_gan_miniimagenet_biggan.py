@@ -41,7 +41,7 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
     @tf.function
     def get_images_from_vectors(self, vectors):
         # return self.gan(vectors)['generate']
-        return self.gan(vectors)['default']
+        return (self.gan(vectors)['default'] + 1) / 2.
 
     def generate_all_vectors(self):
         # vector = tf.random.normal((1, latent_dim))
@@ -63,7 +63,8 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
         return vectors
 
     def generate_all_vectors_p2(self):
-        class_vectors = tf.random.normal((self.n, latent_dim))
+        class_vectors = tf.random.truncated_normal((self.n, latent_dim))
+        # class_vectors = tf.random.normal((self.n, latent_dim))
         # class_vectors = class_vectors / tf.reshape(tf.norm(class_vectors, axis=1), (class_vectors.shape[0], 1))
         vectors = list()
 
@@ -73,13 +74,14 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1)
             # noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
 
-            new_vectors = new_vectors + (noise - new_vectors) * 0.6
+            new_vectors = new_vectors + (noise - new_vectors) * 0.3
 
             vectors.append(new_vectors)
 
         return vectors
 
     def generate_all_vectors_p3(self):
+        # z = tf.random.truncated_normal((self.n, self.latent_dim))
         z = tf.random.normal((self.n, self.latent_dim))
 
         vectors = list()
@@ -87,14 +89,16 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
 
         for i in range(self.k + self.k_val_ml - 1):
             if (i + 1) % self.n == 0:
-                new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0.03)
+                new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0.5)
                 vectors.append(new_z)
             else:
                 new_z = tf.stack(
                     [
-                        z[0, ...] + (z[(i + 1) % self.n, ...] - z[0, ...]) * 0.37,
-                        z[1, ...] + (z[(i + 2) % self.n, ...] - z[1, ...]) * 0.37,
-                        z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.37,
+                        z[0, ...] + (z[(i + 1) % self.n, ...] - z[0, ...]) * 0.3,
+                        z[1, ...] + (z[(i + 2) % self.n, ...] - z[1, ...]) * 0.3,
+                        z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.3,
+                        z[3, ...] + (z[(i + 4) % self.n, ...] - z[3, ...]) * 0.3,
+                        z[4, ...] + (z[(i + 0) % self.n, ...] - z[4, ...]) * 0.3,
                     ],
                     axis=0
                 )
@@ -121,24 +125,24 @@ if __name__ == '__main__':
         k_val_ml=5,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
-        meta_batch_size=1,
+        k_test=50,
+        meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_iterations=1000,
-        meta_learning_rate=0.001,
+        meta_learning_rate=0.0005,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
-        clip_gradients=False,
-        experiment_name='mini_imagenet_p3',
+        clip_gradients=True,
+        experiment_name='mini_imagenet_p1_1.0',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
-    maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
+    # maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=5)
 
-    maml_gan.train(iterations=15000)
+    # maml_gan.train(iterations=60000)
     maml_gan.evaluate(50, seed=42)
