@@ -43,25 +43,25 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
 
             for n in range(self.n):
                 for k in range(self.k):
-                    axes[k, n].imshow(1 - train_ds[n, k, ...], cmap='gray')
+                    axes[k, n].imshow(train_ds[n, k, ...])
 
                 for k in range(self.k_val_ml):
-                    axes[k + self.k, n].imshow(1 - val_ds[n, k, ...], cmap='gray')
+                    axes[k + self.k, n].imshow(val_ds[n, k, ...])
 
             plt.show()
 
     def generate_with_p3(self, z, z_mean, z_log_var, rotation_index):
         if (rotation_index + 1) % 5 == 0:
-            return z + tf.random.normal(shape=z.shape, mean=0, stddev=2.0)
+            return z + tf.random.normal(shape=z.shape, mean=0, stddev=1.0)
 
         z = self.vae.sample(z_mean, z_log_var)
         new_z = tf.stack(
             [
-                z[0, ...] + (z[(rotation_index + 1) % 5, ...] - z[0, ...]) * 0.6,
-                z[1, ...] + (z[(rotation_index + 2) % 5, ...] - z[1, ...]) * 0.6,
-                z[2, ...] + (z[(rotation_index + 3) % 5, ...] - z[2, ...]) * 0.6,
-                z[3, ...] + (z[(rotation_index + 4) % 5, ...] - z[3, ...]) * 0.6,
-                z[4, ...] + (z[(rotation_index + 0) % 5, ...] - z[4, ...]) * 0.6,
+                z[0, ...] + (z[(rotation_index + 1) % 5, ...] - z[0, ...]) * 0.4,
+                z[1, ...] + (z[(rotation_index + 2) % 5, ...] - z[1, ...]) * 0.4,
+                z[2, ...] + (z[(rotation_index + 3) % 5, ...] - z[2, ...]) * 0.4,
+                z[3, ...] + (z[(rotation_index + 4) % 5, ...] - z[3, ...]) * 0.4,
+                z[4, ...] + (z[(rotation_index + 0) % 5, ...] - z[4, ...]) * 0.4,
             ],
             axis=0
         )
@@ -69,11 +69,11 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
         return new_z
 
     def generate_with_p2(self, z, z_mean, z_log_var, rotation_index):
-        noise = tf.random.normal(shape=z.shape, mean=0, stddev=2.0)
-        return z + (z - noise) * 0.6
+        noise = tf.random.normal(shape=z.shape, mean=0, stddev=1.0)
+        return z + (z - noise) * 0.2
 
     def generate_with_p1(self, z, z_mean, z_log_var, rotation_index):
-        return z + tf.random.normal(shape=z.shape, mean=0, stddev=2.0)
+        return z + tf.random.normal(shape=z.shape, mean=0, stddev=0.5)
 
     def generate_new_z_from_z_data(self, z, z_mean, z_log_var, rotation_index):
         # return self.vae.sample(z_mean, z_log_var)
@@ -134,7 +134,7 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
                 train_instances = tf.gather(new_instances, train_indices, axis=0)
                 val_instances = tf.gather(new_instances, val_indices, axis=0)
 
-                # val_instances = self.augment(val_instances)
+                val_instances = self.augment(val_instances)
 
                 return (
                     tf.reshape(train_instances, (self.n, self.k, *train_instances.shape[1:])),
@@ -156,7 +156,7 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
         labels_dataset = self.make_labels_dataset(self.n, self.k, self.k_val_ml, one_hot_labels=True)
 
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(self.meta_batch_size)
+        dataset = dataset.batch(self.meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', tf.data.experimental.cardinality(dataset))
         return dataset

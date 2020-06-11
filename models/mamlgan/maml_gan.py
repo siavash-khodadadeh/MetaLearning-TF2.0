@@ -51,7 +51,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         vectors.append(class_vectors)
         for i in range(self.k + self.k_val_ml - 1):
             new_vectors = class_vectors
-            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1.0)
+            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=0.5)
             new_vectors += noise
             # new_vectors = new_vectors / tf.reshape(tf.norm(new_vectors, axis=1), (new_vectors.shape[0], 1))
             vectors.append(new_vectors)
@@ -65,9 +65,9 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         vectors.append(class_vectors)
         for i in range(self.k + self.k_val_ml - 1):
             new_vectors = class_vectors
-            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1)
+            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1.0)
             # noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
-            new_vectors = new_vectors + (noise - new_vectors) * 0.4
+            new_vectors = new_vectors + (noise - new_vectors) * 0.2
 
             vectors.append(new_vectors)
         return vectors
@@ -85,11 +85,11 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
             else:
                 new_z = tf.stack(
                     [
-                        z[0, ...] + (z[(i + 1) % self.n, ...] - z[0, ...]) * 0.4,
-                        z[1, ...] + (z[(i + 2) % self.n, ...] - z[1, ...]) * 0.4,
-                        z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.4,
-                        z[3, ...] + (z[(i + 4) % self.n, ...] - z[3, ...]) * 0.4,
-                        z[4, ...] + (z[(i + 0) % self.n, ...] - z[4, ...]) * 0.4,
+                        z[0, ...] + (z[(i + 1) % self.n, ...] - z[0, ...]) * 0.6,
+                        z[1, ...] + (z[(i + 2) % self.n, ...] - z[1, ...]) * 0.6,
+                        z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.6,
+                        z[3, ...] + (z[(i + 4) % self.n, ...] - z[3, ...]) * 0.6,
+                        z[4, ...] + (z[(i + 0) % self.n, ...] - z[4, ...]) * 0.6,
                     ],
                     axis=0
                 )
@@ -98,7 +98,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         return vectors
 
     def generate_all_vectors(self):
-        return self.generate_all_vectors_p2()
+        return self.generate_all_vectors_p1()
 
     @tf.function
     def get_images_from_vectors(self, vectors):

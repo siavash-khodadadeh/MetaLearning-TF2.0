@@ -92,7 +92,7 @@ if __name__ == '__main__':
     maml_vae = MAML_VAE(
         vae=vae,
         database=omniglot_database,
-        latent_algorithm='p3',
+        latent_algorithm='p1',
         network_cls=SimpleModel,
         n=5,
         k=1,
@@ -111,12 +111,12 @@ if __name__ == '__main__':
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         clip_gradients=False,
-        experiment_name='omniglot_vae_0.6',
+        experiment_name='omniglot_vae_0.5_shift',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
     maml_vae.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
-    maml_vae.train(iterations=5000)
+    maml_vae.train(iterations=1000)
     maml_vae.evaluate(50, seed=42)
