@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from models.base_data_loader import BaseDataLoader
 from models.base_model import BaseModel
 from utils import combine_first_two_axes
 import settings
@@ -21,11 +22,12 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         database,
         network_cls,
         n,
-        k,
+        k_ml,
         k_val_ml,
+        k_val,
         k_val_val,
-        k_val_test,
         k_test,
+        k_val_test,
         meta_batch_size,
         num_steps_ml,
         lr_inner_ml,
@@ -34,37 +36,35 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         meta_learning_rate,
         report_validation_frequency,
         log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
-        number_of_tasks_val=-1,  # Make sure the validation pick this many tasks.
-        number_of_tasks_test=-1,  # Make sure the validation pick this many tasks.
+        num_tasks_val,  # Make sure the validation pick this many tasks.
         val_seed=-1,  # The seed for validation dataset. -1 means change the samples for each report.
         clip_gradients=False,
         experiment_name=None,
         val_test_batch_norm_momentum=0.0,
         val_database=None,
-        target_database=None,
-        k_val_train=None,
+        test_database=None,
     ):
         super(ModelAgnosticMetaLearningModel, self).__init__(
             database=database,
+            data_loader_cls=BaseDataLoader,
             network_cls=network_cls,
             n=n,
-            k=k,
+            k_ml=k_ml,
             k_val_ml=k_val_ml,
+            k_val=k_val,
             k_val_val=k_val_val,
-            k_val_train=k_val_train,
-            k_val_test=k_val_test,
             k_test=k_test,
+            k_val_test=k_val_test,
             meta_batch_size=meta_batch_size,
             meta_learning_rate=meta_learning_rate,
             save_after_iterations=save_after_iterations,
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
-            number_of_tasks_val=number_of_tasks_val,
-            number_of_tasks_test=number_of_tasks_test,
+            num_tasks_val=num_tasks_val,
             val_seed=val_seed,
             experiment_name=experiment_name,
             val_database=val_database,
-            target_database=target_database
+            test_database=test_database
         )
 
         self.num_steps_ml = num_steps_ml
@@ -96,15 +96,13 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         return set()
 
     def get_network_name(self):
-        if self.network_cls is not None:
-            return self.network_cls.name
-        raise Exception('Model name is not defined. Please override get_network_name function.')
+        return self.model.name
 
     def get_config_str(self):
         config_str = f'model-{self.get_network_name()}_' \
                f'mbs-{self.meta_batch_size}_' \
                f'n-{self.n}_' \
-               f'k-{self.k}_' \
+               f'k-{self.k_ml}_' \
                f'kvalml-{self.k_val_ml}' \
                f'stp-{self.num_steps_ml}'
         return config_str

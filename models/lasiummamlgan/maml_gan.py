@@ -22,9 +22,9 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
 
         dataset = self.get_train_dataset()
         for item in dataset.repeat(-1).take(num_tasks_to_visualize):
-            fig, axes = plt.subplots(self.k + self.k_val_ml, self.n)
+            fig, axes = plt.subplots(self.k_ml + self.k_val_ml, self.n)
             fig.set_figwidth(self.n)
-            fig.set_figheight(self.k + self.k_val_ml)
+            fig.set_figheight(self.k_ml + self.k_val_ml)
 
             (train_ds, val_ds), (_, _) = item
             # Get the first meta batch
@@ -35,11 +35,11 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
                 val_ds = val_ds[..., 0]
 
             for n in range(self.n):
-                for k in range(self.k):
+                for k in range(self.k_ml):
                     axes[k, n].imshow(train_ds[n, k, ...])
 
                 for k in range(self.k_val_ml):
-                    axes[k + self.k, n].imshow(val_ds[n, k, ...])
+                    axes[k + self.k_ml, n].imshow(val_ds[n, k, ...])
 
             plt.show()
 
@@ -49,7 +49,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         vectors = list()
 
         vectors.append(class_vectors)
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=0.5)
             new_vectors += noise
@@ -63,7 +63,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         # class_vectors = class_vectors / tf.reshape(tf.norm(class_vectors, axis=1), (class_vectors.shape[0], 1))
         vectors = list()
         vectors.append(class_vectors)
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1.0)
             # noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
@@ -78,7 +78,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         vectors = list()
         vectors.append(z)
 
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             if (i + 1) % 5 == 0:
                 new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=1.0)
                 vectors.append(new_z)
@@ -105,7 +105,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         return self.gan.generator(vectors)
 
     def get_train_dataset(self):
-        train_labels = tf.repeat(tf.range(self.n), self.k)
+        train_labels = tf.repeat(tf.range(self.n), self.k_ml)
         train_labels = tf.one_hot(train_labels, depth=self.n)
         train_labels = tf.stack([train_labels] * self.meta_batch_size)
         val_labels = tf.repeat(tf.range(self.n), self.k_val_ml)
@@ -117,7 +117,7 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
         # print(val_labels)
         # print('debug\n\n\n')
 
-        train_indices = [i // self.k + i % self.k * self.n for i in range(self.n * self.k)]
+        train_indices = [i // self.k_ml + i % self.k_ml * self.n for i in range(self.n * self.k_ml)]
         val_indices = [i // self.k_val_ml + i % self.k_val_ml * self.n for i in range(self.n * self.k_val_ml)]
 
         def get_task():
@@ -134,26 +134,26 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
             images = tf.image.resize(images, self.generated_image_shape[:2])
             images = tf.reshape(
                 images,
-                (self.meta_batch_size, self.n * (self.k + self.k_val_ml), *self.generated_image_shape)
+                (self.meta_batch_size, self.n * (self.k_ml + self.k_val_ml), *self.generated_image_shape)
             )
 
-            train_ds = images[:, :self.n * self.k, ...]
+            train_ds = images[:, :self.n * self.k_ml, ...]
             train_ds = tf.gather(train_ds, train_indices, axis=1)
-            train_ds = tf.reshape(train_ds, (self.meta_batch_size, self.n, self.k, *self.generated_image_shape))
+            train_ds = tf.reshape(train_ds, (self.meta_batch_size, self.n, self.k_ml, *self.generated_image_shape))
 
-            val_ds = images[:, self.n * self.k:, ...]
+            val_ds = images[:, self.n * self.k_ml:, ...]
             val_ds = combine_first_two_axes(val_ds)
             # Process val if needed
-            val_imgs = list()
-            for i in range(val_ds.shape[0]):
-                val_image = val_ds[i, ...]
-                tx = tf.random.uniform((), -5, 5, dtype=tf.int32)
-                ty = tf.random.uniform((), -5, 5, dtype=tf.int32)
-                transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
-                val_image = tfa.image.transform(val_image, transforms, 'NEAREST')
-                val_imgs.append(val_image)
-
-            val_ds = tf.stack(val_imgs, axis=0)
+            # val_imgs = list()
+            # for i in range(val_ds.shape[0]):
+            #     val_image = val_ds[i, ...]
+            #     tx = tf.random.uniform((), -5, 5, dtype=tf.int32)
+            #     ty = tf.random.uniform((), -5, 5, dtype=tf.int32)
+            #     transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
+            #     val_image = tfa.image.transform(val_image, transforms, 'NEAREST')
+            #     val_imgs.append(val_image)
+            #
+            # val_ds = tf.stack(val_imgs, axis=0)
 
             val_ds = tf.reshape(val_ds, (self.meta_batch_size, self.n * self.k_val_ml, *self.generated_image_shape))
             val_ds = tf.gather(val_ds, val_indices, axis=1)

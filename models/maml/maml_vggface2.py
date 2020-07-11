@@ -27,11 +27,12 @@ def run_vggface2():
         database=vggface_database,
         network_cls=VGGSmallModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=1,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=1,
         lr_inner_ml=0.05,
@@ -40,14 +41,13 @@ def run_vggface2():
         meta_learning_rate=0.0001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='vgg_face2_conv128_mlr_0.0001'
     )
 
     # maml.train(iterations=500000)
-    maml.evaluate(50, seed=42)
+    maml.evaluate(50, num_tasks=1000, seed=42)
 
 
 if __name__ == '__main__':

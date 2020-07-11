@@ -11,11 +11,12 @@ def run_mini_imagenet():
         target_database=ChestXRay8Database(),
         network_cls=MiniImagenetModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=15,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -24,8 +25,7 @@ def run_mini_imagenet():
         meta_learning_rate=0.001,
         report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='mini_imagenet',
         val_seed=42,
@@ -33,8 +33,7 @@ def run_mini_imagenet():
     )
 
     maml.train(iterations=60000)
-    maml.evaluate(50, seed=14, use_val_batch_statistics=True)
-    # maml.evaluate(50, seed=42, use_val_batch_statistics=False)
+    maml.evaluate(50, num_tasks=1000, seed=14, use_val_batch_statistics=True)
 
 
 if __name__ == '__main__':
