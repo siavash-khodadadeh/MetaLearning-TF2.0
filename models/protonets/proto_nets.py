@@ -1,51 +1,11 @@
 import tensorflow as tf
 
+from models.base_data_loader import BaseDataLoader
 from models.base_model import BaseModel
-from networks.proto_networks import SimpleModelProto, VGGSmallModel
+from networks.proto_networks import SimpleModelProto, VGGSmallModel, MiniImagenetModelProto
 from databases import OmniglotDatabase, VGGFace2Database, CelebADatabase
 from utils import combine_first_two_axes
 
-class MiniImagenetModel(tf.keras.Model):
-    name = 'MiniImagenetModel'
-    def __init__(self, *args, **kwargs):
-
-        super(MiniImagenetModel, self).__init__(*args, **kwargs)
-        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
-        self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
-        self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
-        # self.bn1 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn1')
-        self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
-        self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
-        # self.bn2 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn2')
-        self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
-        self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
-        # self.bn3 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn3')
-        self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
-        self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
-        # self.bn4 = tf.keras.layers.LayerNormalization(center=True, scale=False, name='bn4')
-        self.flatten = tf.keras.layers.Flatten(name='flatten')
-
-    def conv_block(self, features, conv, bn=None, training=False):
-        conv_out = conv(features)
-        batch_normalized_out = bn(conv_out, training=training)
-        batch_normalized_out = self.max_pool(batch_normalized_out)
-        return tf.keras.activations.relu(batch_normalized_out)
-
-    def get_features(self, inputs, training=False):
-        import numpy as np
-        image = inputs
-        c1 = self.conv_block(image, self.conv1, self.bn1, training=training)
-        c2 = self.conv_block(c1, self.conv2, self.bn2, training=training)
-        c3 = self.conv_block(c2, self.conv3, self.bn3, training=training)
-        c4 = self.conv_block(c3, self.conv4, self.bn4, training=training)
-        c4 = tf.reshape(c4, [-1, np.prod([int(dim) for dim in c4.get_shape()[1:]])])
-        f = self.flatten(c4)
-        return f
-
-    def call(self, inputs, training=False):
-        out = self.get_features(inputs, training=training)
-
-        return out
 
 class PrototypicalNetworks(BaseModel):
     def __init__(
@@ -53,58 +13,57 @@ class PrototypicalNetworks(BaseModel):
             database,
             network_cls,
             n,
-            k,
+            k_ml,
             k_val_ml,
+            k_val,
             k_val_val,
-            k_val_train,
-            k_val_test,
             k_test,
+            k_val_test,
             meta_batch_size,
             save_after_iterations,
             meta_learning_rate,
             report_validation_frequency,
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
-            number_of_tasks_val=-1,
-            number_of_tasks_test=-1,
+            num_tasks_val=-1,
             val_seed=-1,
             experiment_name=None,
             val_database=None,
-            target_database=None
+            test_database=None
     ):
 
         super(PrototypicalNetworks, self).__init__(
             database=database,
             network_cls=network_cls,
+            data_loader_cls=BaseDataLoader,
             n=n,
-            k=k,
+            k_ml=k_ml,
             k_val_ml=k_val_ml,
+            k_val=k_val,
             k_val_val=k_val_val,
-            k_val_train=k_val_train,
-            k_val_test=k_val_test,
             k_test=k_test,
+            k_val_test=k_val_test,
             meta_batch_size=meta_batch_size,
             meta_learning_rate=meta_learning_rate,
             save_after_iterations=save_after_iterations,
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
-            number_of_tasks_val=number_of_tasks_val,
-            number_of_tasks_test=number_of_tasks_test,
+            num_tasks_val=num_tasks_val,
             val_seed=val_seed,
             experiment_name=experiment_name,
             val_database=val_database,
-            target_database=target_database
+            test_database=test_database
         )
 
     def get_config_str(self):
         return f'model-{self.network_cls.name}_' \
                f'mbs-{self.meta_batch_size}_' \
                f'n-{self.n}_' \
-               f'k-{self.k}_' \
+               f'k-{self.k_ml}_' \
                f'kvalml-{self.k_val_ml}'
 
     def initialize_network(self):
         model = self.network_cls()
-        model(tf.zeros(shape=(self.n * self.k, *self.database.input_shape)))
+        model(tf.zeros(shape=(self.n * self.k_ml, *self.database.input_shape)))
 
         return model
 
@@ -113,9 +72,9 @@ class PrototypicalNetworks(BaseModel):
 
     def get_losses_of_tasks_batch(self, method='train', **kwargs):
         if method == 'train':
-            return self.get_loss_func(training=True, k=self.k)
+            return self.get_loss_func(training=True, k=self.k_ml)
         elif method == 'val':
-            return self.get_loss_func(training=True, k=self.k_val_train)
+            return self.get_loss_func(training=True, k=self.k_val)
         elif method == 'test':
             return self.get_loss_func(training=kwargs['use_val_batch_statistics'], k=self.k_test)
 
@@ -202,7 +161,7 @@ def run_celeba():
     celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     proto_net = PrototypicalNetworks(
         database=celeba_database,
-        network_cls=MiniImagenetModel,
+        network_cls=MiniImagenetModelProto,
         # network_cls=InceptionResNetV1,
         # network_cls=MiniImagenetModel,
         n=5,
