@@ -2,6 +2,92 @@
 
 This is a framework which makes it easy to apply meta-learning techniques on different datasets.
 
+This repository covers a couple of meta-learning algorithms including UMTRA. For the repository of 
+UMTRA during its release, please go to 
+[UMTRA repo](https://github.com/siavash-khodadadeh/UMTRA-Release).
+
+With just one-click you can read the dataset and generate train/validation/test 
+classes. Then feed the tasks to meta-learning algorithm and run it and log 
+train and validation metrics with tensorboard. 
+Finally, you can evaluate the results on test set. 
+ 
+We support a range of meta-learning algorithms for classification including 
+[MAML](https://arxiv.org/abs/1703.03400), 
+[ProtoNets](https://arxiv.org/abs/1703.05175),
+[UMTRA](https://arxiv.org/abs/1811.11819), 
+[LASIUM](https://arxiv.org/abs/2006.10236), 
+and [CACTUs](https://arxiv.org/pdf/1810.02334.pdf). 
+We are adding more and happily welcome new contributions.
+
+For datasets, we support famous meta-learning benchmarks
+including Omniglot, Mini-Imagenet, CelebA. 
+We also support all datasets from [Meta-Dataset](https://arxiv.org/abs/1903.03096).
+Furthermore, we support datasets for cross-domain meta-learning:
+EuroSat,
+PlantDisease,
+ISIC,
+ChestXRay8.
+Last but not least, you can run algorithms on any model defined with Tensorflow 2.0 and 
+Keras regardless of the architecture as far as it fits on the memory. 
+
+Start from defining your own dataset or import one of our pre-defined datasets
+
+`
+mini_imagenet_database = MiniImagenetDatabase()
+`
+
+For MAML start 
+by defining your algorithm and its hyper-parameters 
+(it is a lengthy list, but you can control even the tasks for your validation set
+and random seed, etc.).
+```
+maml = ModelAgnosticMetaLearningModel(
+    database=mini_imagenet_database,
+    target_database=ChestXRay8Database(),
+    network_cls=MiniImagenetModel,
+    n=5,
+    k_ml=1,
+    k_val_ml=5,
+    k_val=1,
+    k_val_val=15,
+    k_test=15,
+    k_val_test=15,
+    meta_batch_size=4,
+    num_steps_ml=5,
+    lr_inner_ml=0.05,
+    num_steps_validation=5,
+    save_after_iterations=15000,
+    meta_learning_rate=0.001,
+    report_validation_frequency=1000,
+    log_train_images_after_iteration=1000,
+    num_tasks_val=100,
+    clip_gradients=True,
+    experiment_name='mini_imagenet',
+    val_seed=42,
+    val_test_batch_norm_momentum=0.0,
+)
+```
+
+and then call train and evaluation by controlling how many tasks you 
+want to evaluate on and do not forget the random seed for reproducibility.
+```
+maml.train(iterations=60000)
+maml.evaluate(50, num_tasks=1000, seed=14, use_val_batch_statistics=True)
+```
+
+You have a really cool idea to apply on top of MAML, just 
+extend our MAML class code and update this function 
+` 
+def get_losses_of_tasks_batch_maml(self)
+`
+
+or if you want to generate tasks in another way, just override function for 
+data reading part:
+
+`
+def get_train_dataset(self)
+`
+
 ## Requirements
 Install all gpu dependencies for running TensorFlow on your system <https://www.tensorflow.org/install/gpu>.
 Install all required packages with
@@ -192,5 +278,6 @@ the variable VOXCELEB_RAW_DATASEST_ADDRESS in settings to the address of that fo
 
 ## Citation
 
-Please cite [this](https://arxiv.org/abs/1811.11819) article if you use this code in your work and want to 
+Please cite both  [this](https://arxiv.org/abs/1811.11819) article 
+and [this](https://arxiv.org/abs/2006.10236) if you use this code in your work and want to 
 publish your research.
