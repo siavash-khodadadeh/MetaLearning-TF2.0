@@ -2,6 +2,10 @@
 
 This is a framework which makes it easy to apply meta-learning techniques on different datasets.
 
+This repository covers a couple of meta-learning algorithms including UMTRA. For the repository of 
+UMTRA during its release, please go to 
+[UMTRA repo](https://github.com/siavash-khodadadeh/UMTRA-Release)
+
 ## Requirements
 Install all gpu dependencies for running TensorFlow on your system <https://www.tensorflow.org/install/gpu>.
 Install all required packages with
