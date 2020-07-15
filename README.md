@@ -75,13 +75,16 @@ maml.train(iterations=60000)
 maml.evaluate(50, num_tasks=1000, seed=14, use_val_batch_statistics=True)
 ```
 
-You have a really cool idea to apply on top of MAML, just 
+The code is designed in a modular way. 
+For example, If you want to change the losses or try a new idea on forward loop of 
+maml, you can
 extend our MAML class code and update this function 
 ` 
 def get_losses_of_tasks_batch_maml(self)
 `
 
-or if you want to generate tasks in another way, just override function for 
+or if you want to just change the way to generate tasks, you can
+just override function for 
 data reading part:
 
 `
