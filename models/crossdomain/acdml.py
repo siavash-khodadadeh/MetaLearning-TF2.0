@@ -29,7 +29,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
             n=self.n,
-            k=self.k,
+            k_ml=self.k_ml,
             k_validation=self.k_val_ml,
             meta_batch_size=self.meta_batch_size
         )
@@ -41,7 +41,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         val_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
             n=self.n,
-            k=self.k,
+            k_ml=self.k_ml,
             k_validation=self.k_val_val,
             meta_batch_size=1,
             partition='val'
@@ -52,12 +52,12 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return val_dataset
 
     def get_test_dataset(self, seed=-1):
-        databases = [self.target_database]
+        databases = [self.database]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
             n=self.n,
-            k=self.k_test,
+            k_ml=self.k_test,
             k_validation=self.k_val_test,
             meta_batch_size=1,
             seed=seed,
@@ -84,7 +84,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             self,
             databases: List[Database],
             n: int,
-            k: int,
+            k_ml: int,
             k_validation: int,
             meta_batch_size: int,
             one_hot_labels: bool = True,
@@ -105,10 +105,10 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             raise Exception("Partition should be 'train', 'val' or 'test'.")
 
         for database in databases:
-            dataset = self.get_supervised_meta_learning_dataset(
+            dataset = self.data_loader.get_supervised_meta_learning_dataset(
                 getattr(database, attr),
                 n,
-                k,
+                k_ml,
                 k_validation,
                 meta_batch_size=3,
                 one_hot_labels=one_hot_labels,
@@ -117,7 +117,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 dtype=tf.string,
                 instance_parse_function=lambda x: x
             )
-            steps_per_epoch = min(steps_per_epoch, dataset.steps_per_epoch)
+            steps_per_epoch = min(steps_per_epoch, tf.data.experimental.cardinality(dataset))
             datasets.append(dataset)
         datasets = tuple(datasets)
 
@@ -164,10 +164,10 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 )
                 return tf.reshape(imgs, shape)
 
-            tr_task_imgs = parse_batch_imgs(tr_task_imgs_addresses, (n, k, 84, 84, 3))
-            tr_dom_imgs = parse_batch_imgs(tr_domain_imgs_addresses, (n, k, 84, 84, 3))
+            tr_task_imgs = parse_batch_imgs(tr_task_imgs_addresses, (n, k_ml, 84, 84, 3))
+            tr_dom_imgs = parse_batch_imgs(tr_domain_imgs_addresses, (n, k_ml, 84, 84, 3))
             val_task_imgs = parse_batch_imgs(val_task_imgs_addresses, (n, k_validation, 84, 84, 3))
-            val_dom_imgs = parse_batch_imgs(val_domain_imgs_addresses, (n, k, 84, 84, 3))
+            val_dom_imgs = parse_batch_imgs(val_domain_imgs_addresses, (n, k_ml, 84, 84, 3))
 
             return (tr_task_imgs, tr_dom_imgs, val_task_imgs, val_dom_imgs), (tr_task_labels, val_task_labels)
 
@@ -180,7 +180,6 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         if steps_per_epoch == 0:
             steps_per_epoch = 1
             dataset = dataset.repeat(meta_batch_size)
-
         dataset = dataset.batch(batch_size=meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
@@ -319,25 +318,25 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                     'train_ds',
                     train_ds,
                     step=step,
-                    max_outputs=self.n * (self.k + self.k_val_ml)
+                    max_outputs=self.n * (self.k_ml + self.k_val_ml)
                 )
                 tf.summary.image(
                     'train_dom',
                     train_dom,
                     step=step,
-                    max_outputs=self.n * (self.k + self.k_val_ml)
+                    max_outputs=self.n * (self.k_ml + self.k_val_ml)
                 )
                 tf.summary.image(
                     'val_ds',
                     val_ds,
                     step=step,
-                    max_outputs=self.n * (self.k + self.k_val_ml)
+                    max_outputs=self.n * (self.k_ml + self.k_val_ml)
                 )
                 tf.summary.image(
                     'val_dom',
                     val_dom,
                     step=step,
-                    max_outputs=self.n * (self.k + self.k_val_ml)
+                    max_outputs=self.n * (self.k_ml + self.k_val_ml)
                 )
 
     @tf.function
@@ -575,15 +574,15 @@ def get_assembled_model(num_classes, ind=11, architecture=MiniImagenetModel, inp
 
 def run_acdml():
     acdml = AttentionCrossDomainMetaLearning(
-        database=None,
-        target_database=EuroSatDatabase(),
+        database=EuroSatDatabase(),
         network_cls=get_assembled_model,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=1,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -592,8 +591,7 @@ def run_acdml():
         meta_learning_rate=0.001,
         report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='acdml_11',
         val_seed=42,
@@ -601,7 +599,7 @@ def run_acdml():
     )
 
     acdml.train(iterations=60000)
-    acdml.evaluate(100, seed=14)
+    acdml.evaluate(iterations=100, num_tasks=1000, seed=14)
 
 
 if __name__ == '__main__':
