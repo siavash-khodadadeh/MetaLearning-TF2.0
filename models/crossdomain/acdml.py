@@ -47,11 +47,11 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             partition='val'
         )
         val_dataset = val_dataset.repeat(-1)
-        val_dataset = val_dataset.take(self.number_of_tasks_val)
-        setattr(val_dataset, 'steps_per_epoch', self.number_of_tasks_val)
+        val_dataset = val_dataset.take(self.num_tasks_val)
+        setattr(val_dataset, 'steps_per_epoch', self.num_tasks_val)
         return val_dataset
 
-    def get_test_dataset(self, seed=-1):
+    def get_test_dataset(self, num_tasks, seed=-1):
         databases = [self.database]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
@@ -64,8 +64,8 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             partition='test'
         )
         test_dataset = test_dataset.repeat(-1)
-        test_dataset = test_dataset.take(self.number_of_tasks_test)
-        setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
+        test_dataset = test_dataset.take(num_tasks)
+        setattr(test_dataset, 'steps_per_epoch', num_tasks)
         return test_dataset
 
     def get_parse_function(self):
@@ -185,8 +185,8 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         setattr(dataset, 'steps_per_epoch', steps_per_epoch)
         return dataset
 
-    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
-        self.test_dataset = self.get_test_dataset(seed=seed)
+    def evaluate(self, iterations, num_tasks, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
+        self.test_dataset = self.get_test_dataset(num_tasks, seed=seed)
         self.load_model(iterations=iterations_to_load_from)
 
         accs = list()
