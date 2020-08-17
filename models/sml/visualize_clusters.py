@@ -6,7 +6,7 @@ from PIL import Image
 
 
 # experiment_name = 'mini_imagenet_learn_miniimagent_features'
-experiment_name = 'cactus_celeba_original3'
+experiment_name = 'chestx_imagenet_features'
 clusters_address = os.path.join(settings.PROJECT_ROOT_ADDRESS, 'models/sml/cache/', experiment_name, 'clusters_500')
 
 
