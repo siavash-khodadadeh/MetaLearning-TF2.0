@@ -18,7 +18,7 @@ class SeparateDomainMAML(ModelAgnosticMetaLearningModel):
             trn_database.train_folders,
             val_database.train_folders,
             n=self.n,
-            k=self.k,
+            k=self.k_ml,
             k_validation=self.k_val_ml,
             meta_batch_size=self.meta_batch_size
         )

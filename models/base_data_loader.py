@@ -1,0 +1,190 @@
+from typing import Dict, List
+
+import tensorflow as tf
+import numpy as np
+
+from utils import keep_keys_with_greater_than_equal_k_items
+
+
+class BaseDataLoader(object):
+    def __init__(
+            self,
+            database,
+            val_database,
+            test_database,
+            n,
+            k_ml,
+            k_val_ml,
+            k_val,
+            k_val_val,
+            k_test,
+            k_val_test,
+            meta_batch_size,
+            num_tasks_val,
+            val_seed
+    ):
+        self.database = database
+        self.val_database = val_database
+        self.test_database = test_database
+        self.n = n
+        self.k_ml = k_ml
+        self.k_val_ml = k_val_ml
+        self.k_val = k_val
+        self.k_val_val = k_val_val
+        self.k_test = k_test
+        self.k_val_test = k_val_test
+        self.meta_batch_size = meta_batch_size
+        self.num_tasks_val = num_tasks_val
+        self.val_seed = val_seed
+
+    def get_train_dataset(self):
+        dataset = self.get_supervised_meta_learning_dataset(
+            self.database.train_folders,
+            n=self.n,
+            k=self.k_ml,
+            k_validation=self.k_val_ml,
+            meta_batch_size=self.meta_batch_size
+        )
+        return dataset
+
+    def get_val_dataset(self):
+        val_dataset = self.get_supervised_meta_learning_dataset(
+            self.val_database.val_folders,
+            n=self.n,
+            k=self.k_val,
+            k_validation=self.k_val_val,
+            meta_batch_size=1,
+            seed=self.val_seed,
+        )
+        val_dataset = val_dataset.repeat(-1)
+        val_dataset = val_dataset.take(self.num_tasks_val)
+
+        return val_dataset
+
+    def get_test_dataset(self, num_tasks, seed=-1):
+        test_dataset = self.get_supervised_meta_learning_dataset(
+            self.test_database.test_folders,
+            n=self.n,
+            k=self.k_test,
+            k_validation=self.k_val_test,
+            meta_batch_size=1,
+            seed=seed
+        )
+        test_dataset = test_dataset.repeat(-1)
+        test_dataset = test_dataset.take(num_tasks)
+
+        return test_dataset
+
+    def make_labels_dataset(self, n: int, k: int, k_validation: int, one_hot_labels: bool) -> tf.data.Dataset:
+        """
+            Creates a tf.data.Dataset which generates corresponding labels to meta-learning inputs.
+            This method just creates this dataset for one task and repeats it. You can use zip to combine this dataset
+            with your desired dataset.
+            Note that the repeat is set to -1 so that the dataset will repeat itself. This will allow us to
+            zip it with any other dataset and it will generate labels as much as needed.
+            Also notice that this dataset is not batched into meta batch size, so this will just generate labels for one
+            task.
+        """
+        tr_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k), 0))
+        val_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k_validation), 0))
+
+        if one_hot_labels:
+            tr_labels_ds = tr_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
+            val_labels_ds = val_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
+
+        labels_dataset = tf.data.Dataset.zip((tr_labels_ds, val_labels_ds))
+        labels_dataset = labels_dataset.repeat(-1)
+
+        return labels_dataset
+
+    def get_supervised_meta_learning_dataset(
+            self,
+            folders: Dict[str, List[str]],
+            n: int,
+            k: int,
+            k_validation: int,
+            meta_batch_size: int,
+            one_hot_labels: bool = True,
+            reshuffle_each_iteration: bool = True,
+            seed: int = -1,
+            dtype=tf.float32,  # The input dtype
+            instance_parse_function=None
+    ) -> tf.data.Dataset:
+        """
+            Folders are dictionary
+            If it is a dictionary then each item is the class name and the corresponding values are the file addresses
+            of images of that class.
+        """
+        if instance_parse_function is None:
+            instance_parse_function = self.get_parse_function()
+
+        if seed != -1:
+            np.random.seed(seed)
+
+        def _get_instances(class_dir_address):
+            def get_instances(class_dir_address):
+                class_dir_address = class_dir_address.numpy().decode('utf-8')
+                instance_names = folders[class_dir_address]
+                instances = np.random.choice(instance_names, size=k + k_validation, replace=False)
+                return instances[:k], instances[k:k + k_validation]
+
+            return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
+
+        if seed != -1:
+            parallel_iterations = 1
+        else:
+            parallel_iterations = None
+
+        def parse_function(tr_imgs_addresses, val_imgs_addresses):
+            tr_imgs = tf.map_fn(
+                instance_parse_function,
+                tr_imgs_addresses,
+                dtype=dtype,
+                parallel_iterations=parallel_iterations
+            )
+            val_imgs = tf.map_fn(
+                instance_parse_function,
+                val_imgs_addresses,
+                dtype=dtype,
+                parallel_iterations=parallel_iterations
+            )
+
+            return tf.stack(tr_imgs), tf.stack(val_imgs)
+
+        keep_keys_with_greater_than_equal_k_items(folders, k + k_validation)
+
+        dataset = tf.data.Dataset.from_tensor_slices(sorted(list(folders.keys())))
+        if seed != -1:
+            dataset = dataset.shuffle(
+                buffer_size=len(folders.keys()),
+                reshuffle_each_iteration=reshuffle_each_iteration,
+                seed=seed
+            )
+            # When using a seed the map should be done in the same order so no parallel execution
+            dataset = dataset.map(_get_instances, num_parallel_calls=1)
+        else:
+            dataset = dataset.shuffle(
+                buffer_size=len(folders.keys()),
+                reshuffle_each_iteration=reshuffle_each_iteration
+            )
+            dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.batch(n, drop_remainder=True)
+
+        labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+
+        steps_per_epoch = tf.data.experimental.cardinality(dataset)
+        if steps_per_epoch == 0:
+            dataset = dataset.repeat(-1).take(meta_batch_size).batch(meta_batch_size)
+        else:
+            dataset = dataset.batch(meta_batch_size, drop_remainder=True)
+
+        return dataset
+
+    def get_parse_function(self):
+        """Returns a function which get an example_address
+         and processes it such that it will be input to the network."""
+        return self.database._get_parse_function()

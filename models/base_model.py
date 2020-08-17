@@ -1,7 +1,6 @@
 import os
 import sys
 from abc import abstractmethod
-from typing import List, Dict
 
 import tensorflow as tf
 import numpy as np
@@ -22,49 +21,48 @@ class BaseModel(metaclass=SetupCaller):
     def __init__(
         self,
         database,
+        data_loader_cls,
         network_cls,
         n,
-        k,
+        k_ml,
         k_val_ml,
+        k_val,
         k_val_val,
-        k_val_test,
         k_test,
+        k_val_test,
         meta_batch_size,
         meta_learning_rate,
         save_after_iterations,
         report_validation_frequency,
         log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
-        number_of_tasks_val,
-        number_of_tasks_test,
-        val_seed,  # The seed for validation dataset. -1 means change the samples for each report.
+        num_tasks_val,
+        val_seed=-1,  # The seed for validation dataset. -1 means change the samples for each report.
         experiment_name=None,
         val_database=None,
-        target_database=None,
-        k_val_train=None,  # This is the number of instances per class for validation set tasks' train set.
+        test_database=None,
     ):
         self.database = database
         self.val_database = val_database if val_database is not None else self.database
-        self.target_database = target_database if target_database is not None else self.database
+        self.test_database = test_database if test_database is not None else self.database
 
-        self.train_dataset = None
-        self.val_dataset = None
-        self.test_dataset = None
-        self.experiment_name = experiment_name
         self.n = n
-        self.k = k
+        self.k_ml = k_ml
         self.k_val_ml = k_val_ml
+        self.k_val = k_val if k_val is not None else self.k_ml
         self.k_val_val = k_val_val
-        self.k_val_test = k_val_test
-        self.k_val_train = k_val_train if k_val_train is not None else self.k
         self.k_test = k_test
+        self.k_val_test = k_val_test
+
         self.meta_batch_size = meta_batch_size
+        self.num_tasks_val = num_tasks_val
+        self.val_seed = val_seed
+        self.data_loader = self.init_data_loader(data_loader_cls)
+
+        self.experiment_name = experiment_name
         self.meta_learning_rate = meta_learning_rate
         self.save_after_iterations = save_after_iterations
         self.log_train_images_after_iteration = log_train_images_after_iteration
         self.report_validation_frequency = report_validation_frequency
-        self.number_of_tasks_val = number_of_tasks_val
-        self.number_of_tasks_test = number_of_tasks_test
-        self.val_seed = val_seed
 
         self._root = self.get_root()
         self.train_log_dir = None
@@ -88,6 +86,23 @@ class BaseModel(metaclass=SetupCaller):
         self.val_log_dir = os.path.join(self._root, self.get_config_info(), 'logs/val/')
         self.checkpoint_dir = os.path.join(self._root, self.get_config_info(), 'saved_models/')
 
+    def init_data_loader(self, data_loader_cls):
+        return data_loader_cls(
+            database=self.database,
+            val_database=self.val_database,
+            test_database=self.test_database,
+            n=self.n,
+            k_ml=self.k_ml,
+            k_val_ml=self.k_val_ml,
+            k_val=self.k_val,
+            k_val_val=self.k_val_val,
+            k_test=self.k_test,
+            k_val_test=self.k_val_test,
+            meta_batch_size=self.meta_batch_size,
+            num_tasks_val=self.num_tasks_val,
+            val_seed=self.val_seed
+        )
+
     def get_root(self):
         return os.path.dirname(sys.argv[0])
 
@@ -108,13 +123,13 @@ class BaseModel(metaclass=SetupCaller):
                     'train',
                     train_ds,
                     step=step,
-                    max_outputs=self.n * (self.k + self.k_val_ml)
+                    max_outputs=self.n * (self.k_ml + self.k_val_ml)
                 )
                 tf.summary.image(
                     'validation',
                     val_ds,
                     step=step,
-                    max_outputs=self.n * (self.k + self.k_val_ml)
+                    max_outputs=self.n * (self.k_ml + self.k_val_ml)
                 )
 
     def save_model(self, iterations):
@@ -157,52 +172,21 @@ class BaseModel(metaclass=SetupCaller):
                 #     tf.summary.histogram(f'updated_model_{k}_' + str(var_count), var, step=iteration_count)
 
     def get_train_dataset(self):
-        dataset = self.get_supervised_meta_learning_dataset(
-            self.database.train_folders,
-            n=self.n,
-            k=self.k,
-            k_validation=self.k_val_ml,
-            meta_batch_size=self.meta_batch_size
-        )
-        # steps_per_epoch = dataset.steps_per_epoch
-        # setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
+        return self.data_loader.get_train_dataset()
 
     def get_val_dataset(self):
-        val_dataset = self.get_supervised_meta_learning_dataset(
-            self.val_database.val_folders,
-            n=self.n,
-            k=self.k_val_train,
-            k_validation=self.k_val_val,
-            meta_batch_size=1,
-            seed=self.val_seed,
-        )
-        val_dataset = val_dataset.repeat(-1)
-        val_dataset = val_dataset.take(self.number_of_tasks_val)
-        setattr(val_dataset, 'steps_per_epoch', self.number_of_tasks_val)
-        return val_dataset
+        return self.data_loader.get_val_dataset()
 
-    def get_test_dataset(self, seed=-1):
-        test_dataset = self.get_supervised_meta_learning_dataset(
-            self.target_database.test_folders,
-            n=self.n,
-            k=self.k_test,
-            k_validation=self.k_val_test,
-            meta_batch_size=1,
-            seed=seed
-        )
-        test_dataset = test_dataset.repeat(-1)
-        test_dataset = test_dataset.take(self.number_of_tasks_test)
-        setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
-        return test_dataset
+    def get_test_dataset(self, num_tasks, seed=-1):
+        return self.data_loader.get_test_dataset(num_tasks, seed)
 
     def train(self, iterations=5):
         self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
         self.val_summary_writer = tf.summary.create_file_writer(self.val_log_dir)
-        self.train_dataset = self.get_train_dataset()
+        train_dataset = self.get_train_dataset()
         iteration_count = self.load_model()
-        epoch_count = iteration_count // self.train_dataset.steps_per_epoch
-        pbar = tqdm(self.train_dataset)
+        epoch_count = iteration_count // tf.data.experimental.cardinality(train_dataset)
+        pbar = tqdm(train_dataset)
 
         train_accuracy_metric = tf.metrics.Mean()
         train_accuracy_metric.reset_states()
@@ -211,9 +195,7 @@ class BaseModel(metaclass=SetupCaller):
 
         should_continue = iteration_count < iterations
         while should_continue:
-            for (train_ds, val_ds), (train_labels, val_labels) in self.train_dataset:
-                # import sounddevice
-                # sounddevice.play(train_ds[0, 0, 0, ...], 16000)
+            for (train_ds, val_ds), (train_labels, val_labels) in train_dataset:
                 train_acc, train_loss = self.meta_train_loop(train_ds, val_ds, train_labels, val_labels)
                 train_accuracy_metric.update_state(train_acc)
                 train_loss_metric.update_state(train_loss)
@@ -235,7 +217,7 @@ class BaseModel(metaclass=SetupCaller):
 
                 if iteration_count % self.report_validation_frequency == 0:
                     self.report_validation_loss_and_accuracy(iteration_count)
-                    if epoch_count != 0:
+                    if iteration_count != 0:
                         print('Train Loss: {}'.format(train_loss_metric.result().numpy()))
                         print('Train Accuracy: {}'.format(train_accuracy_metric.result().numpy()))
                     with self.train_summary_writer.as_default():
@@ -286,12 +268,12 @@ class BaseModel(metaclass=SetupCaller):
 
         return final_acc, final_loss
 
-    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
+    def evaluate(self, iterations, num_tasks, iterations_to_load_from=None, seed=-1, use_val_batch_statistics=True):
         """If you set use val batch statistics to true, then the batch information from all the test samples will be
         used for batch normalization layers (like MAML experiments), otherwise batch normalization layers use the
         average and variance which they learned during the updates."""
         # TODO add ability to set batch norm momentum if use_val_batch_statistics=False
-        self.test_dataset = self.get_test_dataset(seed=seed)
+        self.test_dataset = self.get_test_dataset(num_tasks=num_tasks, seed=seed)
         self.load_model(iterations=iterations_to_load_from)
 
         accs = list()
@@ -303,11 +285,11 @@ class BaseModel(metaclass=SetupCaller):
         )
         counter = 0
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
-            remainder_num = self.number_of_tasks_test // 20
+            remainder_num = num_tasks // 20
             if remainder_num == 0:
                 remainder_num = 1
             if counter % remainder_num == 0:
-                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+                print(f'{counter} / {num_tasks} are evaluated.')
 
             counter += 1
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
@@ -337,7 +319,7 @@ class BaseModel(metaclass=SetupCaller):
         if seed != -1:
             np.random.seed(None)
 
-        confidence_interval = 1.96 * final_acc_std / np.sqrt(self.number_of_tasks_test)
+        confidence_interval = 1.96 * final_acc_std / np.sqrt(num_tasks)
 
         print(
             f'final acc: {final_acc_mean} +- {confidence_interval}'
@@ -385,121 +367,6 @@ class BaseModel(metaclass=SetupCaller):
         self.log_metric(self.val_summary_writer, 'Accuracy', self.val_accuracy_metric, step=epoch_count)
         print('Validation Loss: {}'.format(self.val_loss_metric.result().numpy()))
         print('Validation Accuracy: {}'.format(self.val_accuracy_metric.result().numpy()))
-
-    def get_parse_function(self):
-        """Returns a function which get an example_address
-         and processes it such that it will be input to the network."""
-        return self.database._get_parse_function()
-
-    def make_labels_dataset(self, n: int, k: int, k_validation: int, one_hot_labels: bool) -> tf.data.Dataset:
-        """Creates a tf.data.Dataset which generates corresponding labels to meta-learning inputs.
-        This method just creates this dataset for one task and repeats it. You can use zip to combine this dataset
-        with your desired dataset.
-        Note that the repeat is set to -1 so that the dataset will repeat itself. This will allow us to
-        zip it with any other dataset and it will generate labels as much as needed.
-        Also notice that this dataset is not batched into meta batch size, so this will just generate labels for one
-        task."""
-        tr_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k), 0))
-        val_labels_ds = tf.data.Dataset.from_tensor_slices(np.expand_dims(np.repeat(np.arange(n), k_validation), 0))
-
-        if one_hot_labels:
-            tr_labels_ds = tr_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
-            val_labels_ds = val_labels_ds.map(lambda example: tf.one_hot(example, depth=n))
-
-        labels_dataset = tf.data.Dataset.zip((tr_labels_ds, val_labels_ds))
-        labels_dataset = labels_dataset.repeat(-1)
-
-        return labels_dataset
-
-    def get_supervised_meta_learning_dataset(
-            self,
-            folders: Dict[str, List[str]],
-            n: int,
-            k: int,
-            k_validation: int,
-            meta_batch_size: int,
-            one_hot_labels: bool = True,
-            reshuffle_each_iteration: bool = True,
-            seed: int = -1,
-            dtype=tf.float32,  # The input dtype
-            instance_parse_function=None
-    ) -> tf.data.Dataset:
-        """Folders can be a dictionary and also real name of folders.
-        If it is a dictionary then each item is the class name and the corresponding values are the file addressses
-        of images of that class."""
-        if instance_parse_function is None:
-            instance_parse_function = self.get_parse_function()
-
-        if seed != -1:
-            np.random.seed(seed)
-
-        def _get_instances(class_dir_address):
-            def get_instances(class_dir_address):
-                class_dir_address = class_dir_address.numpy().decode('utf-8')
-                instance_names = folders[class_dir_address]
-                # instance_names = [
-                #     os.path.join(class_dir_address, file_name) for file_name in os.listdir(class_dir_address)
-                # ]
-                instances = np.random.choice(instance_names, size=k + k_validation, replace=False)
-                return instances[:k], instances[k:k + k_validation]
-
-            return tf.py_function(get_instances, inp=[class_dir_address], Tout=[tf.string, tf.string])
-
-        if seed != -1:
-            parallel_iterations = 1
-        else:
-            parallel_iterations = None
-
-        def parse_function(tr_imgs_addresses, val_imgs_addresses):
-            tr_imgs = tf.map_fn(
-                instance_parse_function,
-                tr_imgs_addresses,
-                dtype=dtype,
-                parallel_iterations=parallel_iterations
-            )
-            val_imgs = tf.map_fn(
-                instance_parse_function,
-                val_imgs_addresses,
-                dtype=dtype,
-                parallel_iterations=parallel_iterations
-            )
-
-            return tf.stack(tr_imgs), tf.stack(val_imgs)
-
-        keep_keys_with_greater_than_equal_k_items(folders, k + k_validation)
-        # folders = get_folders_with_greater_than_equal_k_files(folders, k + k_validation)
-        steps_per_epoch = len(folders.keys()) // (n * meta_batch_size)
-
-        dataset = tf.data.Dataset.from_tensor_slices(sorted(list(folders.keys())))
-        if seed != -1:
-            dataset = dataset.shuffle(
-                buffer_size=len(folders.keys()),
-                reshuffle_each_iteration=reshuffle_each_iteration,
-                seed=seed
-            )
-            # When using a seed the map should be done in the same order so no parallel execution
-            dataset = dataset.map(_get_instances, num_parallel_calls=1)
-        else:
-            dataset = dataset.shuffle(
-                buffer_size=len(folders.keys()),
-                reshuffle_each_iteration=reshuffle_each_iteration
-            )
-            dataset = dataset.map(_get_instances, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-        dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset = dataset.batch(n, drop_remainder=True)
-
-        labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
-
-        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-
-        if steps_per_epoch == 0:
-            dataset = dataset.repeat(-1).take(meta_batch_size).batch(meta_batch_size)
-        else:
-            dataset = dataset.batch(meta_batch_size, drop_remainder=True)
-
-        setattr(dataset, 'steps_per_epoch', steps_per_epoch)
-        return dataset
 
     @abstractmethod
     def get_losses_of_tasks_batch(self, method='train', **kwargs):

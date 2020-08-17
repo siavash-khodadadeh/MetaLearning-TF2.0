@@ -3,11 +3,18 @@ from tensorflow.keras import layers
 
 from databases import OmniglotDatabase
 
-from models.mamlvae.database_parsers import OmniglotParser
-from models.mamlvae.maml_vae import MAML_VAE
-from models.mamlvae.vae import VAE
-from networks.maml_umtra_networks import SimpleModel
+from models.lasiumprotonetsvae.database_parsers import OmniglotParser
+from models.lasiumprotonetsvae.protonets_vae import ProtoNetsVAE
+from models.lasiumprotonetsvae.vae import VAE
+from networks.proto_networks import SimpleModelProto, VGGSmallModel
 
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024 * 4.5)])
+    except RuntimeError as e:
+        print(e)
 
 def get_encoder(latent_dim):
     encoder_inputs = keras.Input(shape=(28, 28, 1))
@@ -87,35 +94,32 @@ if __name__ == '__main__':
     )
     vae.perform_training(epochs=1000, checkpoint_freq=100)
     vae.load_latest_checkpoint()
-    # vae.visualize_meta_learning_task()
+    vae.visualize_meta_learning_task()
 
-    maml_vae = MAML_VAE(
+    proto_vae = ProtoNetsVAE(
         vae=vae,
+        latent_algorithm='p2',
         database=omniglot_database,
-        network_cls=SimpleModel,
+        network_cls=SimpleModelProto,
         n=5,
         k=1,
         k_val_ml=5,
+        k_val_train=None,
         k_val_val=15,
         k_val_test=15,
-        k_test=5,
+        k_test=1,
         meta_batch_size=4,
-        num_steps_ml=5,
-        lr_inner_ml=0.4,
-        num_steps_validation=5,
         save_after_iterations=1000,
         meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
-        clip_gradients=False,
-        experiment_name='omniglot_std_1.0',
-        val_seed=42,
-        val_test_batch_norm_momentum=0.0
+        experiment_name='proto_vae_omniglot_shift_0.4',
+        val_seed=42
     )
 
-    maml_vae.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
+    proto_vae.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
-    maml_vae.train(iterations=5000)
-    maml_vae.evaluate(50, seed=42)
+    proto_vae.train(iterations=8000)
+    proto_vae.evaluate(-1, seed=42)

@@ -1,8 +1,9 @@
 import tensorflow as tf
 
+from models.base_data_loader import BaseDataLoader
 from models.base_model import BaseModel
-from networks.proto_networks import SimpleModelProto, VGGSmallModel
-from databases import OmniglotDatabase, VGGFace2Database
+from networks.proto_networks import SimpleModelProto, VGGSmallModel, MiniImagenetModelProto
+from databases import OmniglotDatabase, VGGFace2Database, CelebADatabase
 from utils import combine_first_two_axes
 
 
@@ -12,58 +13,57 @@ class PrototypicalNetworks(BaseModel):
             database,
             network_cls,
             n,
-            k,
+            k_ml,
             k_val_ml,
+            k_val,
             k_val_val,
-            k_val_train,
-            k_val_test,
             k_test,
+            k_val_test,
             meta_batch_size,
             save_after_iterations,
             meta_learning_rate,
             report_validation_frequency,
             log_train_images_after_iteration,  # Set to -1 if you do not want to log train images.
-            number_of_tasks_val=-1,
-            number_of_tasks_test=-1,
+            num_tasks_val=-1,
             val_seed=-1,
             experiment_name=None,
             val_database=None,
-            target_database=None
+            test_database=None
     ):
 
         super(PrototypicalNetworks, self).__init__(
             database=database,
             network_cls=network_cls,
+            data_loader_cls=BaseDataLoader,
             n=n,
-            k=k,
+            k_ml=k_ml,
             k_val_ml=k_val_ml,
+            k_val=k_val,
             k_val_val=k_val_val,
-            k_val_train=k_val_train,
-            k_val_test=k_val_test,
             k_test=k_test,
+            k_val_test=k_val_test,
             meta_batch_size=meta_batch_size,
             meta_learning_rate=meta_learning_rate,
             save_after_iterations=save_after_iterations,
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
-            number_of_tasks_val=number_of_tasks_val,
-            number_of_tasks_test=number_of_tasks_test,
+            num_tasks_val=num_tasks_val,
             val_seed=val_seed,
             experiment_name=experiment_name,
             val_database=val_database,
-            target_database=target_database
+            test_database=test_database
         )
 
     def get_config_str(self):
         return f'model-{self.network_cls.name}_' \
                f'mbs-{self.meta_batch_size}_' \
                f'n-{self.n}_' \
-               f'k-{self.k}_' \
+               f'k-{self.k_ml}_' \
                f'kvalml-{self.k_val_ml}'
 
     def initialize_network(self):
         model = self.network_cls()
-        model(tf.zeros(shape=(self.n * self.k, *self.database.input_shape)))
+        model(tf.zeros(shape=(self.n * self.k_ml, *self.database.input_shape)))
 
         return model
 
@@ -72,9 +72,9 @@ class PrototypicalNetworks(BaseModel):
 
     def get_losses_of_tasks_batch(self, method='train', **kwargs):
         if method == 'train':
-            return self.get_loss_func(training=True, k=self.k)
+            return self.get_loss_func(training=True, k=self.k_ml)
         elif method == 'val':
-            return self.get_loss_func(training=True, k=self.k)
+            return self.get_loss_func(training=True, k=self.k_val)
         elif method == 'test':
             return self.get_loss_func(training=kwargs['use_val_batch_statistics'], k=self.k_test)
 
@@ -133,48 +133,50 @@ def run_omniglot():
         database=omniglot_database,
         network_cls=SimpleModelProto,
         n=5,
-        k=5,
+        k=1,
         k_val_ml=5,
         k_val_val=15,
+        k_val_train=None,
         k_val_test=15,
-        k_test=3,
-        meta_batch_size=32,
+        k_test=5,
+        meta_batch_size=4,
         save_after_iterations=1000,
         meta_learning_rate=0.001,
-        report_validation_frequency=250,
-        log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
+        report_validation_frequency=200,
+        log_train_images_after_iteration=200,  # Set to -1 if you do not want to log train images.
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         val_seed=-1,
         experiment_name=None
     )
 
-    proto_net.train(iterations=1000)
-    # proto_net.evaluate(-1)
+    proto_net.train(iterations=5000)
+    proto_net.evaluate(-1)
 
 
 def run_celeba():
-    celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
+#     celeba_database = VGGFace2Database(input_shape=(224, 224, 3))
     # celeba_database = CelebADatabase(input_shape=(224, 224, 3))
     # celeba_database = LFWDatabase(input_shape=(224, 224, 3))
-    # celeba_database = CelebADatabase(input_shape=(84, 84, 3))
+    celeba_database = CelebADatabase(input_shape=(84, 84, 3))
     proto_net = PrototypicalNetworks(
         database=celeba_database,
-        network_cls=VGGSmallModel,
+        network_cls=MiniImagenetModelProto,
         # network_cls=InceptionResNetV1,
         # network_cls=MiniImagenetModel,
         n=5,
         k=1,
         k_val_ml=5,
+        k_val_train=None,
         k_val_val=15,
         k_val_test=15,
-        k_test=1,
-        meta_batch_size=4,
-        save_after_iterations=500,
+        k_test=15,
+        meta_batch_size=32,
+        save_after_iterations=1000,
         # meta_learning_rate=0.001,
         meta_learning_rate=0.0001,
-        report_validation_frequency=500,
-        log_train_images_after_iteration=1000,  # Set to -1 if you do not want to log train images.
+        report_validation_frequency=200,
+        log_train_images_after_iteration=200,  # Set to -1 if you do not want to log train images.
         number_of_tasks_val=100,
         number_of_tasks_test=1000,
         val_seed=42,
@@ -184,14 +186,14 @@ def run_celeba():
     # Start with 0.00005
     # From 44000 train with smaller learning rate 0.000001
     # From 59000 train with smaller learning rate 0.0000005
-    proto_net.train(iterations=90000)
-    # proto_net.evaluate(-1, seed=42)
+    proto_net.train(iterations=180000)
+    proto_net.evaluate(-1, seed=42)
 
 
 if __name__ == '__main__':
-    run_omniglot()
+#     run_omniglot()
     # run_mini_imagenet()
     # from datetime import datetime
     # begin_time = datetime.now()
-    # run_celeba()
+    run_celeba()
     # print(datetime.now() - begin_time)

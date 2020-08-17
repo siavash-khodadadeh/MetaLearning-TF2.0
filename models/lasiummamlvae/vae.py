@@ -1,4 +1,5 @@
 import os
+import random
 
 import numpy as np
 import tensorflow as tf
@@ -144,7 +145,12 @@ class VAE(keras.Model):
         self.loss_metric.update_state(outputs['loss'])
         self.reconstruction_loss_metric.update_state(outputs['reconstruction_loss'])
         self.kl_loss_metric.update_state(outputs['kl_loss'])
-        return outputs
+
+        return {
+            "loss": self.loss_metric.result(),
+            "reconstruction_loss": self.reconstruction_loss_metric.result(),
+            "kl_loss": self.kl_loss_metric.result()
+        }
 
     def train_step(self, data):
         with tf.GradientTape() as tape:
@@ -157,11 +163,16 @@ class VAE(keras.Model):
         self.reconstruction_loss_metric.update_state(outputs['reconstruction_loss'])
         self.kl_loss_metric.update_state(outputs['kl_loss'])
 
-        return outputs
+        return {
+            "loss": self.loss_metric.result(),
+            "reconstruction_loss": self.reconstruction_loss_metric.result(),
+            "kl_loss": self.kl_loss_metric.result()
+        }
 
     def get_dataset(self, partition='train'):
         instances = self.database.get_all_instances(partition_name=partition)
-        train_dataset = tf.data.Dataset.from_tensor_slices(instances).shuffle(len(self.database.train_folders))
+        random.shuffle(instances)
+        train_dataset = tf.data.Dataset.from_tensor_slices(instances).shuffle(len(instances))
         train_dataset = train_dataset.map(self.parser.get_parse_fn())
         train_dataset = train_dataset.batch(128)
         return train_dataset
@@ -177,7 +188,7 @@ class VAE(keras.Model):
             os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlvae',
+                'lasiummamlvae',
                 'vae',
                 self.get_vae_name(),
                 'vae_checkpoints'
@@ -204,7 +215,7 @@ class VAE(keras.Model):
             filepath=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlvae',
+                'lasiummamlvae',
                 'vae',
                 self.get_vae_name(),
                 'vae_checkpoints',
@@ -221,7 +232,7 @@ class VAE(keras.Model):
             log_dir=os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
-                'mamlvae',
+                'lasiummamlvae',
                 'vae',
                 self.get_vae_name(),
                 'vae_logs'
