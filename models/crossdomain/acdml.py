@@ -198,11 +198,11 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         )
         counter = 0
         for (train_ds, train_dom, val_ds, val_dom), (train_labels, val_labels) in self.test_dataset:
-            remainder_num = self.number_of_tasks_test // 20
+            remainder_num = num_tasks // 20
             if remainder_num == 0:
                 remainder_num = 1
             if counter % remainder_num == 0:
-                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+                print(f'{counter} / {num_tasks} are evaluated.')
 
             counter += 1
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
@@ -234,7 +234,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         if seed != -1:
             np.random.seed(None)
 
-        confidence_interval = 1.96 * final_acc_std / np.sqrt(self.number_of_tasks_test)
+        confidence_interval = 1.96 * final_acc_std / np.sqrt(num_tasks)
 
         print(
             f'final acc: {final_acc_mean} +- {confidence_interval}'
