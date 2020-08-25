@@ -36,7 +36,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return dataset
 
     def get_val_dataset(self):
-        databases = [ISICDatabase()]
+        databases = [self.val_database]
 
         val_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -52,7 +52,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return val_dataset
 
     def get_test_dataset(self, num_tasks, seed=-1):
-        databases = [self.database]
+        databases = [self.val_database]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
@@ -110,7 +110,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 n,
                 k_ml,
                 k_validation,
-                meta_batch_size=3,
+                meta_batch_size=2,
                 one_hot_labels=one_hot_labels,
                 reshuffle_each_iteration=reshuffle_each_iteration,
                 seed=seed,
@@ -132,13 +132,13 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
             def f(*args):
                 #  np.random.seed(42)
-                indices = np.random.choice(range(len(datasets)), size=1, replace=False)
+                indices = np.random.choice(range(len(datasets)), size=2, replace=False)
                 tr_ds = args[indices[0] * 4][0, ...]
                 tr_labels = args[indices[0] * 4 + 2][0, ...]
                 tr_domain = args[indices[0] * 4][1, ...]
-                val_ds = args[indices[0] * 4 + 1][0, ...]
-                val_labels = args[indices[0] * 4 + 3][0, ...]
-                val_domain = args[indices[0] * 4][2, ...]
+                val_ds = args[indices[1] * 4][0, ...]
+                val_labels = args[indices[1] * 4 + 2][0, ...]
+                val_domain = args[indices[1] * 4][1, ...]
                 return tr_ds, tr_labels, tr_domain, val_ds, val_labels, val_domain
 
             return tf.py_function(f, inp=tensors, Tout=[tf.string, tf.float32, tf.string] * 2)
@@ -171,8 +171,9 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
 
             return (tr_task_imgs, tr_dom_imgs, val_task_imgs, val_dom_imgs), (tr_task_labels, val_task_labels)
 
-        dataset = tf.data.Dataset.zip(datasets)
         # TODO steps per epoch can be inferred from tf.data.experimental.cardinality(dataset)
+
+        dataset = tf.data.Dataset.zip(datasets)
         dataset = dataset.map(choose_two_domains)
         dataset = dataset.map(parse_function)
 
@@ -574,7 +575,9 @@ def get_assembled_model(num_classes, ind=11, architecture=MiniImagenetModel, inp
 
 def run_acdml():
     acdml = AttentionCrossDomainMetaLearning(
-        database=EuroSatDatabase(),
+        database=None,
+        val_database=ISICDatabase(),
+        test_database=EuroSatDatabase(),
         network_cls=get_assembled_model,
         n=5,
         k_ml=1,

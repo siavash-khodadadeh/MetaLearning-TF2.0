@@ -32,7 +32,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         dataset = self.get_cross_domain_meta_learning_dataset(
             databases=self.meta_train_databases,
             n=self.n,
-            k=self.k,
+            k_ml=self.k_ml,
             k_validation=self.k_val_ml,
             meta_batch_size=self.meta_batch_size
         )
@@ -54,7 +54,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             self,
             databases: List[Database],
             n: int,
-            k: int,
+            k_ml: int,
             k_validation: int,
             meta_batch_size: int,
             one_hot_labels: bool = True,
@@ -65,10 +65,10 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         datasets = list()
         steps_per_epoch = 1000000
         for database in databases:
-            dataset = self.get_supervised_meta_learning_dataset(
+            dataset = self.data_loader.get_supervised_meta_learning_dataset(
                 database.train_folders,
                 n,
-                k,
+                k_ml,
                 k_validation,
                 meta_batch_size=1,
                 one_hot_labels=one_hot_labels,
@@ -77,7 +77,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 dtype=tf.string,
                 instance_parse_function=lambda x: x
             )
-            steps_per_epoch = min(steps_per_epoch, dataset.steps_per_epoch)
+            steps_per_epoch = min(steps_per_epoch, tf.data.experimental.cardinality(dataset))
             datasets.append(dataset)
         datasets = tuple(datasets)
 
@@ -119,7 +119,7 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
                 )
                 return tf.reshape(imgs, shape)
 
-            tr_task_imgs = parse_batch_imgs(tr_task_imgs_addresses, (n, k, 84, 84, 3))
+            tr_task_imgs = parse_batch_imgs(tr_task_imgs_addresses, (n, k_ml, 84, 84, 3))
             val_task_imgs = parse_batch_imgs(val_task_imgs_addresses, (n, k_validation, 84, 84, 3))
             tr_task_labels = tf.squeeze(tr_task_labels, axis=0)
             val_task_labels = tf.squeeze(val_task_labels, axis=0)
@@ -163,11 +163,12 @@ def run_ccdml():
         database=test_database,
         network_cls=MiniImagenetModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=1,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -176,8 +177,7 @@ def run_ccdml():
         meta_learning_rate=0.001,
         report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='cdml',
         val_seed=42,
@@ -185,7 +185,8 @@ def run_ccdml():
     )
 
     ccdml.train(iterations=60000)
-    ccdml.evaluate(50, seed=14)
+    acdml.evaluate(iterations=100, num_tasks=1000, seed=14)
+
 
 
 if __name__ == '__main__':
