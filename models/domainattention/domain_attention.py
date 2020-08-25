@@ -82,7 +82,7 @@ def run_domain_attention():
     )
 
     da.train(iterations=60000)
-    acdml.evaluate(iterations=50, num_tasks=1000, seed=14)
+    da.evaluate(iterations=50, num_tasks=1000, seed=14)
 
 
 if __name__ == '__main__':
