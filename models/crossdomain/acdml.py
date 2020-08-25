@@ -52,7 +52,7 @@ class AttentionCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         return val_dataset
 
     def get_test_dataset(self, num_tasks, seed=-1):
-        databases = [self.val_database]
+        databases = [self.test_database]
 
         test_dataset = self.get_cross_domain_meta_learning_dataset(
             databases=databases,
