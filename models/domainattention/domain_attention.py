@@ -56,15 +56,16 @@ def run_domain_attention():
         train_databases=train_domain_databases,
         meta_train_databases=meta_train_domain_databases,
         database=test_database,
-        target_database=test_database,
+        test_database=test_database,
         network_cls=None,
         image_shape=(84, 84, 3),
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=1,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -73,8 +74,7 @@ def run_domain_attention():
         meta_learning_rate=0.001,
         report_validation_frequency=1000,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='domain_attention_freeze_attention_instance',
         val_seed=42,
@@ -82,7 +82,7 @@ def run_domain_attention():
     )
 
     da.train(iterations=60000)
-    da.evaluate(50, seed=14)
+    da.evaluate(iterations=50, num_tasks=1000, seed=14)
 
 
 if __name__ == '__main__':
