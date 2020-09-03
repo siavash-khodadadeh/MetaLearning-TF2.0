@@ -14,6 +14,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         db_encoder_lr,
         root,
         image_shape=(84, 84, 3),
+        element_wise_attention=False,
         *args,
         **kwargs
     ):
@@ -24,6 +25,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.db_encoder_epochs = db_encoder_epochs
         self.db_encoder_lr = db_encoder_lr
         self.feature_networks = []
+        self.element_wise_attention = element_wise_attention
         self.perform_pre_training()
 
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='max_pool')
@@ -36,11 +38,18 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
         self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
         self.flatten = tf.keras.layers.Flatten(name='flatten')
-        self.attention_network_dense = tf.keras.layers.Dense(
-            len(self.feature_networks),
-            activation='softmax',
-            name='attention_network_dense'
-        )
+        if self.element_wise_attention:
+            self.attention_network_dense = tf.keras.layers.Dense(
+                len(self.feature_networks) * self.feature_size,
+                activation='softmax',
+                name='attention_network_dense'
+            )
+        else:
+            self.attention_network_dense = tf.keras.layers.Dense(
+                len(self.feature_networks),
+                activation='softmax',
+                name='attention_network_dense'
+            )
 
         self.classification_dense1 = tf.keras.layers.Dense(64, activation='relu', name='classification_dense1')
         self.classification_dense2 = tf.keras.layers.Dense(64, activation='relu', name='classification_dense2')
@@ -66,10 +75,12 @@ class DomainAttentionModel(tf.keras.models.Model):
         weights = self.conv_block(weights, self.conv4, self.bn4, training=training)
         weights = self.flatten(weights)
         weights = self.attention_network_dense(weights)
-        domain_attention = False
-        if domain_attention:
-            weights = tf.reduce_mean(weights, axis=0)
-            x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
+#         domain_attention = False
+#         if domain_attention:
+#             weights = tf.reduce_mean(weights, axis=0)
+#             x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
+        if self.element_wise_attention:
+            x = tf.reshape(weights, feature_vectors.shape) * feature_vectors
         else:
             x = tf.expand_dims(tf.transpose(weights), axis=2) * feature_vectors
 
@@ -189,3 +200,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         for feature_network in feature_networks:
             feature_network.trainable = False
             self.feature_networks.append(feature_network)
+        if self.element_wise_attention:
+            input = tf.keras.layers.Input(shape=self.image_shape, name='at_input')
+            feature_vector = feature_network.get_features(input, training=False)
+            self.feature_size = feature_vector.shape[-1]
