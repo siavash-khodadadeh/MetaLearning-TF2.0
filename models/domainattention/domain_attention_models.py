@@ -64,7 +64,7 @@ class DomainAttentionModel(tf.keras.models.Model):
     def call(self, inputs, training=None, mask=None):
         feature_vectors = list()
         for feature_network in self.feature_networks:
-            feature_vector = feature_network.get_features(inputs, training=training)
+            feature_vector = feature_network.get_features(inputs, training=False)
             feature_vectors.append(feature_vector)
 
         feature_vectors = tf.stack(feature_vectors)
@@ -85,7 +85,10 @@ class DomainAttentionModel(tf.keras.models.Model):
             x = tf.expand_dims(tf.transpose(weights), axis=2) * feature_vectors
 
         # sum over weighted vectors so it will be a weighted mean
-        x = tf.reduce_sum(x, axis=0)
+#         x = tf.reduce_sum(x, axis=0)
+
+        # concatenate weighted vectors so we do not lose information from summation
+        x = tf.reshape(x, (x.shape[1], -1))
 
         x = self.classification_dense1(x)
         x = self.classification_dense2(x)

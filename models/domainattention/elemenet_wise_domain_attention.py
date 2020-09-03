@@ -6,18 +6,18 @@ from models.crossdomain.cdml import CombinedCrossDomainMetaLearning
 from models.domainattention.domain_attention_models import DomainAttentionModel
 
 
-class DomainAttention(CombinedCrossDomainMetaLearning):
+class ElementWiseDomainAttention(CombinedCrossDomainMetaLearning):
     def __init__(self, train_databases, image_shape=(84, 84, 3), *args, **kwargs):
         self.train_databases = train_databases
         self.epochs_each_domain = [450, 50, 50, 50]
         self.image_shape = image_shape
-        super(DomainAttention, self).__init__(*args, **kwargs)
+        super(ElementWiseDomainAttention, self).__init__(*args, **kwargs)
 
     def get_network_name(self):
         return 'DomainAttentionModel'
 
     def initialize_network(self):
-        da = DomainAttentionModel(
+        ewda = DomainAttentionModel(
             train_dbs=self.train_databases,
             num_classes=self.n,
             root=self._root,
@@ -26,9 +26,9 @@ class DomainAttention(CombinedCrossDomainMetaLearning):
             image_shape=self.image_shape,
             element_wise_attention=True
         )
-        da(tf.zeros(shape=(1, *self.image_shape)))
+        ewda(tf.zeros(shape=(1, *self.image_shape)))
 
-        return da
+        return ewda
 
     def get_only_outer_loop_update_layers(self):
         only_outer_loop_update_layers = set()
@@ -53,7 +53,7 @@ def run_domain_attention():
 
     test_database = EuroSatDatabase()
 
-    ewda = DomainAttention(
+    ewda = ElementWiseDomainAttention(
         train_databases=train_domain_databases,
         meta_train_databases=meta_train_domain_databases,
         database=test_database,
