@@ -51,7 +51,7 @@ def run_domain_attention():
         CUBDatabase(),
     ]
 
-    test_database = EuroSatDatabase()
+    test_database = ChestXRay8Database()
 
     ewda = ElementWiseDomainAttention(
         train_databases=train_domain_databases,
@@ -77,7 +77,7 @@ def run_domain_attention():
         log_train_images_after_iteration=1000,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='element_wise_domain_attention',
+        experiment_name='element_wise_domain_attention_ablation_study',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
