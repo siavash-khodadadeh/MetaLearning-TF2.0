@@ -15,6 +15,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         root,
         image_shape=(84, 84, 3),
         element_wise_attention=False,
+        dense_layer_sizes=[],
         *args,
         **kwargs
     ):
@@ -26,6 +27,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.db_encoder_lr = db_encoder_lr
         self.feature_networks = []
         self.element_wise_attention = element_wise_attention
+        self.dense_layer_sizes = dense_layer_sizes
         self.perform_pre_training()
 
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='max_pool')
@@ -51,9 +53,12 @@ class DomainAttentionModel(tf.keras.models.Model):
                 name='attention_network_dense'
             )
 
-        self.classification_dense1 = tf.keras.layers.Dense(64, activation='relu', name='classification_dense1')
-        self.classification_dense2 = tf.keras.layers.Dense(64, activation='relu', name='classification_dense2')
-        self.classification_dense3 = tf.keras.layers.Dense(num_classes, activation=None, name='classification_dense3')
+        self.dense_layers = []
+        i = 1
+        for n in self.dense_layer_sizes:
+            self.dense_layers.append(tf.keras.layers.Dense(n, activation='relu', name='classification_dense' + str(i)))
+            i += 1
+        self.dense_layers.append(tf.keras.layers.Dense(num_classes, activation=None, name='classification_dense' + str(i)))
 
     def conv_block(self, features, conv, bn=None, training=False):
         conv_out = conv(features)
@@ -81,16 +86,18 @@ class DomainAttentionModel(tf.keras.models.Model):
 #             x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
         if self.element_wise_attention:
             x = tf.reshape(weights, feature_vectors.shape) * feature_vectors
-            # concatenate weighted vectors so we do not lose information from summation
-            x = tf.reshape(x, (x.shape[1], -1))
         else:
             x = tf.expand_dims(tf.transpose(weights), axis=2) * feature_vectors
-            # sum over weighted vectors so it will be a weighted mean
-            x = tf.reduce_sum(x, axis=0)
 
-        x = self.classification_dense1(x)
-        x = self.classification_dense2(x)
-        return self.classification_dense3(x)
+        # sum over weighted vectors so it will be a weighted mean
+#         x = tf.reduce_sum(x, axis=0)
+
+        # concatenate weighted vectors so we do not lose information from summation
+        x = tf.reshape(x, (x.shape[1], -1))
+
+        for layer in self.dense_layers:
+            x = layer(x)
+        return x
 
     def get_attention_network(self):
         network = MiniImagenetModel(num_classes=len(self.feature_networks))
