@@ -85,6 +85,7 @@ class DomainAttentionModel(tf.keras.models.Model):
 #             weights = tf.reduce_mean(weights, axis=0)
 #             x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
         if self.element_wise_attention:
+            x = tf.reshape(weights, feature_vectors.shape) * feature_vectors
             # concatenate weighted vectors so we do not lose information from summation
             x = tf.reshape(x, (x.shape[1], -1))
         else:
