@@ -77,27 +77,25 @@ class DomainAttentionModel(tf.keras.models.Model):
 
         feature_vectors = tf.stack(feature_vectors)
 
-#         weights = self.conv_block(inputs, self.conv1, self.bn1, training=training)
-#         weights = self.conv_block(weights, self.conv2, self.bn2, training=training)
-#         weights = self.conv_block(weights, self.conv3, self.bn3, training=training)
-#         weights = self.conv_block(weights, self.conv4, self.bn4, training=training)
-#         weights = self.flatten(weights)
-#         weights = self.attention_network_dense(weights)
-# #         domain_attention = False
-# #         if domain_attention:
-# #             weights = tf.reduce_mean(weights, axis=0)
-# #             x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
-#         if self.element_wise_attention:
-#             x = tf.reshape(weights, feature_vectors.shape) * feature_vectors
-#             # concatenate weighted vectors so we do not lose information from summation
-#             x = tf.reshape(x, (x.shape[1], -1))
-#         else:
-#             x = tf.expand_dims(tf.transpose(weights), axis=2) * feature_vectors
-#             # sum over weighted vectors so it will be a weighted mean
-#             x = tf.reduce_sum(x, axis=0)
+        weights = self.conv_block(inputs, self.conv1, self.bn1, training=training)
+        weights = self.conv_block(weights, self.conv2, self.bn2, training=training)
+        weights = self.conv_block(weights, self.conv3, self.bn3, training=training)
+        weights = self.conv_block(weights, self.conv4, self.bn4, training=training)
+        weights = self.flatten(weights)
+        weights = self.attention_network_dense(weights)
+#         domain_attention = False
+#         if domain_attention:
+#             weights = tf.reduce_mean(weights, axis=0)
+#             x = tf.reshape(weights, (-1, 1, 1)) * feature_vectors
+        if self.element_wise_attention:
+            x = tf.reshape(weights, feature_vectors.shape) * feature_vectors
+            # concatenate weighted vectors so we do not lose information from summation
+            x = tf.reshape(x, (x.shape[1], -1))
+        else:
+            x = tf.expand_dims(tf.transpose(weights), axis=2) * feature_vectors
+            # sum over weighted vectors so it will be a weighted mean
+            x = tf.reduce_sum(x, axis=0)
 
-        x = feature_vectors
-        x = tf.reshape(x, (x.shape[1], -1))
         for layer in self.dense_layers:
             x = layer(x)
         return x
