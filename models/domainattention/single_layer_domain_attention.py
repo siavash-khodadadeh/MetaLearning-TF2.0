@@ -25,7 +25,7 @@ class ElementWiseDomainAttention(CombinedCrossDomainMetaLearning):
             db_encoder_lr=0.001,
             image_shape=self.image_shape,
             element_wise_attention=True,
-            dense_layer_sizes=[64, 64]
+            dense_layer_sizes=[]
         )
         ewda(tf.zeros(shape=(1, *self.image_shape)))
 
@@ -78,7 +78,7 @@ def run_domain_attention():
         log_train_images_after_iteration=1000,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='element_wise_domain_attention',
+        experiment_name='single_layer_domain_attention',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
