@@ -60,7 +60,7 @@ class VGGSmallModel(tf.keras.models.Model):
 class FaceRecognition(ModelAgnosticMetaLearningModel):
     def initialize_network(self):
         model = self.network_cls(num_classes=128)
-        model(tf.zeros(shape=(self.n * self.k, *self.database.input_shape)))
+        model(tf.zeros(shape=(self.n * self.k_ml, *self.database.input_shape)))
         return model
 
     def get_tf_dataset(self, folders):
@@ -148,7 +148,7 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
 
         return iteration_count
 
-    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1):
+    def evaluate(self, iterations, iterations_to_load_from=None, seed=-1, num_tasks=1000):
         # self.load_model(iterations=51, acc='0.78')
         # self.load_model()
         # model = load_model('facenet_keras.h5')
@@ -160,13 +160,13 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
         self.model.summary()
         # dense = tf.keras.layers.Dense(self.n, activation='softmax')(model.output)
         # self.model = tf.keras.models.Model(inputs=model.inputs, outputs=dense)
-        self.test_dataset = self.get_test_dataset(seed)
+        self.test_dataset = self.get_test_dataset(seed=seed, num_tasks=num_tasks)
 
         task_number = 0
         accs = list()
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
             task_number += 1
-            if task_number % (self.number_of_tasks_test // 20) == 0:
+            if task_number % (num_tasks // 20) == 0:
                 print(f'{task_number} finished.')
             train_labels = combine_first_two_axes(train_labels)
             val_labels = combine_first_two_axes(val_labels)
@@ -195,19 +195,19 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
         print(f'accuracy mean: {np.mean(accs)}')
         print(f'accuracy std: {np.std(accs)}')
         print(
-            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(num_tasks)}'
         )
         return np.mean(accs)
 
-    def evaluate_with_original_face_recognition(self, iterations, iterations_to_load_from=None, seed=-1):
-        self.test_dataset = self.get_test_dataset(seed)
+    def evaluate_with_original_face_recognition(self, iterations, iterations_to_load_from=None, seed=-1, num_tasks=1000):
+        self.test_dataset = self.get_test_dataset(seed=seed, num_tasks=num_tasks)
 
         accs = list()
         counter = 0
 
         for (train_ds, val_ds), (train_labels, val_labels) in self.test_dataset:
             if counter % 50 == 0:
-                print(f'{counter} / {self.number_of_tasks_test} are evaluated.')
+                print(f'{counter} / {num_tasks} are evaluated.')
             counter += 1
             train_labels = combine_first_two_axes(train_labels)
             val_labels = combine_first_two_axes(val_labels)
@@ -257,7 +257,7 @@ class FaceRecognition(ModelAgnosticMetaLearningModel):
         print(f'accuracy mean: {np.mean(accs)}')
         print(f'accuracy std: {np.std(accs)}')
         print(
-            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(self.number_of_tasks_test)}'
+            f'final acc: {np.mean(accs)} +- {1.96 * np.std(accs) / np.sqrt(num_tasks)}'
         )
         return np.mean(accs)
 
@@ -273,11 +273,12 @@ def run_celeba():
         network_cls=MiniImagenetModel,
         # network_cls=VGGSmallModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=1,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.01,
@@ -286,8 +287,7 @@ def run_celeba():
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='celeba'
     )
