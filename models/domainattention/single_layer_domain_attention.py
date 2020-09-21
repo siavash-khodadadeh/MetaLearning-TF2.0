@@ -33,8 +33,13 @@ class ElementWiseDomainAttention(CombinedCrossDomainMetaLearning):
 
     def get_only_outer_loop_update_layers(self):
         only_outer_loop_update_layers = set()
-        for layer_name in ('conv1', 'conv2', 'conv3', 'conv4', 'bn1', 'bn2', 'bn3', 'bn4', 'attention_network_dense'):
-            only_outer_loop_update_layers.add(self.model.get_layer(layer_name))
+        for layer_name in (
+                'conv1', 'conv2', 'conv3', 'conv4', 'bn1', 'bn2', 'bn3', 'bn4', 'attention_network_dense',
+                'channel_attention_0', 'channel_attention_1', 'channel_attention_2', 'channel_attention_3',
+                'classification_dense'
+        ):
+            # only_outer_loop_update_layers.add(self.model.get_layer(layer_name))
+            only_outer_loop_update_layers.add(layer_name)
 
         return only_outer_loop_update_layers
 
@@ -66,10 +71,10 @@ def run_domain_attention():
         k_val_ml=5,
         k_val=1,
         k_val_val=15,
-        k_test=5,
+        k_test=1,
         k_val_test=15,
         meta_batch_size=4,
-        num_steps_ml=5,
+        num_steps_ml=1,
         lr_inner_ml=0.05,
         num_steps_validation=5,
         save_after_iterations=15000,
@@ -78,7 +83,7 @@ def run_domain_attention():
         log_train_images_after_iteration=1000,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='single_layer_domain_attention',
+        experiment_name='single_layer_domain_attention_sigmoid_channel_test',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )
@@ -89,8 +94,4 @@ def run_domain_attention():
 if __name__ == '__main__':
     # tf.config.experimental_run_functions_eagerly(True)
 
-    # TODO Run experiments for VAE
-    # TODO We do not need three fully connected layers
-    # TODO We have to combine features in a better way
-    # TODO Check whether attention is implemented correctly
     run_domain_attention()

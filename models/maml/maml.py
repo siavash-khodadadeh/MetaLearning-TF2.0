@@ -133,7 +133,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 model_layer = model_layer.get_layer(layer_name)
                 updated_model_layer = updated_model_layer.get_layer(layer_name)
 
-            if variable.name in gradients and model_layer not in self.only_outer_loop_update_layers:
+            # TODO Check if we should use variable.name or variable?
+            if variable.name in gradients and model_layer.name not in self.only_outer_loop_update_layers:
                 gradient = gradients[variable.name]
                 if assign:
                     updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr] - self.lr_inner_ml * gradient)
