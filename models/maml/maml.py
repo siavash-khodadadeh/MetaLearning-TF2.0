@@ -133,7 +133,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 model_layer = model_layer.get_layer(layer_name)
                 updated_model_layer = updated_model_layer.get_layer(layer_name)
 
-            # TODO Check if we should use variable.name or variable?
+            # TODO check this further
+            # It is important to check by name in order not to leak to inner loop models. Otherwise the result will not
+            # be correct.
             if variable.name in gradients and model_layer.name not in self.only_outer_loop_update_layers:
                 gradient = gradients[variable.name]
                 if assign:
