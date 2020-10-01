@@ -106,9 +106,9 @@ if __name__ == '__main__':
         database=mini_imagenet_database,
         network_cls=MiniImagenetModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
-        k_val_train=1,
+        k_val=1,
         k_val_val=15,
         k_test=1,
         k_val_test=15,
@@ -120,10 +120,9 @@ if __name__ == '__main__':
         meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='mini_imagenet',
+        experiment_name='mini_imagenet_crop_random_uniform',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
@@ -131,4 +130,4 @@ if __name__ == '__main__':
     maml_vae.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
     maml_vae.train(iterations=8000)
-    maml_vae.evaluate(50, seed=42)
+    maml_vae.evaluate(50, seed=42, num_tasks=1000)

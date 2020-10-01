@@ -29,8 +29,8 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
 
         dataset = self.get_train_dataset()
         for item in dataset.take(num_tasks_to_visualize):
-            fig, axes = plt.subplots(self.k + self.k_val_ml, self.n)
-            fig.set_figwidth(self.k + self.k_val_ml)
+            fig, axes = plt.subplots(self.k_ml + self.k_val_ml, self.n)
+            fig.set_figwidth(self.k_ml + self.k_val_ml)
             fig.set_figheight(self.n)
 
             (train_ds, val_ds), (_, _) = item
@@ -42,11 +42,11 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
                 val_ds = val_ds[..., 0]
 
             for n in range(self.n):
-                for k in range(self.k):
+                for k in range(self.k_ml):
                     axes[k, n].imshow(train_ds[n, k, ...])
 
                 for k in range(self.k_val_ml):
-                    axes[k + self.k, n].imshow(val_ds[n, k, ...])
+                    axes[k + self.k_ml, n].imshow(val_ds[n, k, ...])
 
             plt.show()
 
@@ -70,10 +70,10 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
 
     def generate_with_p2(self, z, z_mean, z_log_var, rotation_index):
         noise = tf.random.normal(shape=z.shape, mean=0, stddev=1.0)
-        return z + (z - noise) * 0.2
+        return z + (noise - z) * 0.4
 
     def generate_with_p1(self, z, z_mean, z_log_var, rotation_index):
-        return z + tf.random.normal(shape=z.shape, mean=0, stddev=0.5)
+        return z + tf.random.normal(shape=z.shape, mean=0, stddev=tf.random.uniform(shape=(), minval=0, maxval=2))
 
     def generate_new_z_from_z_data(self, z, z_mean, z_log_var, rotation_index):
         # return self.vae.sample(z_mean, z_log_var)
@@ -95,17 +95,21 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
             ty = tf.random.uniform((), -5, 5, dtype=tf.int32)
             transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
             new_image = tfa.image.transform(new_image, transforms, 'NEAREST')
+
+            new_image = tf.image.random_crop(new_image, size=(64, 64, 3))
             new_images.append(new_image)
 
         new_images = tf.stack(new_images, axis=0)
+
+        new_images = tf.image.resize(new_images, size=(84, 84))
         return new_images
 
     def get_train_dataset(self):
         def generate_new_samples_with_vae(instances):
             # from datetime import datetime
-            train_indices = [i // self.k + i % self.k * self.n for i in range(self.n * self.k)]
+            train_indices = [i // self.k_ml + i % self.k_ml * self.n for i in range(self.n * self.k_ml)]
             val_indices = [
-                self.n * self.k + i // self.k_val_ml + i % self.k_val_ml * self.n
+                self.n * self.k_ml + i // self.k_val_ml + i % self.k_val_ml * self.n
                 for i in range(self.n * self.k_val_ml)
             ]
 
@@ -118,7 +122,7 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
 
                 # current_time = datetime.now()
                 new_zs = list()
-                for i in range(self.k + self.k_val_ml - 1):
+                for i in range(self.k_ml + self.k_val_ml - 1):
                     new_z = self.generate_new_z_from_z_data(z, z_mean, z_log_var, rotation_index=i)
                     new_zs.append(new_z)
                 new_zs = tf.concat(new_zs, axis=0)
@@ -137,7 +141,7 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
                 val_instances = self.augment(val_instances)
 
                 return (
-                    tf.reshape(train_instances, (self.n, self.k, *train_instances.shape[1:])),
+                    tf.reshape(train_instances, (self.n, self.k_ml, *train_instances.shape[1:])),
                     tf.reshape(val_instances, (self.n, self.k_val_ml, *val_instances.shape[1:])),
                 )
 
@@ -153,7 +157,7 @@ class MAML_VAE(ModelAgnosticMetaLearningModel):
         dataset = dataset.batch(self.n, drop_remainder=True)
 
         dataset = dataset.map(generate_new_samples_with_vae)
-        labels_dataset = self.make_labels_dataset(self.n, self.k, self.k_val_ml, one_hot_labels=True)
+        labels_dataset = self.data_loader.make_labels_dataset(self.n, self.k_ml, self.k_val_ml, one_hot_labels=True)
 
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
         dataset = dataset.batch(self.meta_batch_size, drop_remainder=True)

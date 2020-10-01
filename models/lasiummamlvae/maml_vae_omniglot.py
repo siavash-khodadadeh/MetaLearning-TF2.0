@@ -95,11 +95,12 @@ if __name__ == '__main__':
         latent_algorithm='p1',
         network_cls=SimpleModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
-        k_val_test=15,
         k_test=1,
+        k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.4,
@@ -108,8 +109,7 @@ if __name__ == '__main__':
         meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=False,
         experiment_name='omniglot_vae_0.5_shift',
         val_seed=42,
@@ -119,4 +119,4 @@ if __name__ == '__main__':
     maml_vae.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
     maml_vae.train(iterations=1000)
-    maml_vae.evaluate(50, seed=42)
+    maml_vae.evaluate(50, seed=42, num_tasks=1000)

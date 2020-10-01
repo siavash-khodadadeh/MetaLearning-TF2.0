@@ -7,7 +7,7 @@ from databases import OmniglotDatabase, MiniImagenetDatabase
 from models.lasiummamlgan.database_parsers import OmniglotParser, MiniImagenetParser
 from models.lasiummamlgan.gan import GAN
 from models.lasiummamlgan.maml_gan import MAMLGAN
-from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model
 
 
 # Hub module info
@@ -53,9 +53,9 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
         vectors = list()
 
         vectors.append(class_vectors)
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
-            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1.0)
+            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=0.5)
             new_vectors += noise
             # new_vectors = new_vectors / tf.reshape(tf.norm(new_vectors, axis=1), (new_vectors.shape[0], 1))
             vectors.append(new_vectors)
@@ -69,7 +69,7 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
         vectors = list()
 
         vectors.append(class_vectors)
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1)
             # noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
@@ -87,7 +87,7 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
         vectors = list()
         vectors.append(z)
 
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             if (i + 1) % self.n == 0:
                 new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0.5)
                 vectors.append(new_z)
@@ -108,9 +108,12 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
 
 
 if __name__ == '__main__':
-    mini_imagenet_database = MiniImagenetDatabase()
-    shape = (84, 84, 3)
+    mini_imagenet_database = MiniImagenetDatabase(input_shape=(224, 224, 3))
+    shape = (224, 224, 3)
     latent_dim = 120
+    import os
+    os.environ['TFHUB_CACHE_DIR'] = '/home/siavash/tf_hub'
+
     gan = hub.load("https://tfhub.dev/deepmind/bigbigan-resnet50/1", tags=[]).signatures['generate']
     setattr(gan, 'parser', MiniImagenetParser(shape=shape))
 
@@ -119,25 +122,25 @@ if __name__ == '__main__':
         latent_dim=latent_dim,
         generated_image_shape=shape,
         database=mini_imagenet_database,
-        network_cls=MiniImagenetModel,
+        network_cls=VGG19Model,
         n=5,
-        k=1,
-        k_val_ml=5,
+        k_ml=1,
+        k_val_ml=1,
+        k_val=1,
         k_val_val=15,
+        k_test=1,
         k_val_test=15,
-        k_test=50,
         meta_batch_size=1,
-        num_steps_ml=5,
-        lr_inner_ml=0.05,
+        num_steps_ml=1,
+        lr_inner_ml=0.001,
         num_steps_validation=5,
         save_after_iterations=1000,
-        meta_learning_rate=0.0005,
+        meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='mini_imagenet_p2_0.2',
+        experiment_name='mini_imagenet_p1_vgg19',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
@@ -145,4 +148,4 @@ if __name__ == '__main__':
     maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=5)
 
     # maml_gan.train(iterations=60000)
-    maml_gan.evaluate(50, seed=42)
+    maml_gan.evaluate(50, seed=42, num_tasks=1000)

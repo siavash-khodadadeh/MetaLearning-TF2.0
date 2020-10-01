@@ -163,10 +163,11 @@ class VGG19Model(tf.keras.models.Model):
         self.block5_conv4 = tf.keras.layers.Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv4')
         self.block5_pool = tf.keras.layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')
 
+        self.average_pool = tf.keras.layers.AveragePooling2D(pool_size=(7, 7))
         self.flatten = tf.keras.layers.Flatten(name='flatten')
-        self.fc1 = tf.keras.layers.Dense(4096, activation='relu', name='fc1')
-        self.fc2 = tf.keras.layers.Dense(4096, activation='relu', name='fc2')
-        self.fc3 = tf.keras.layers.Dense(num_classes, activation='softmax', name='predictions')
+        # self.fc1 = tf.keras.layers.Dense(512, activation='relu', name='fc1')
+        # self.fc2 = tf.keras.layers.Dense(1024, activation='relu', name='fc2')
+        self.fc3 = tf.keras.layers.Dense(num_classes, activation=None, name='predictions')
 
     def call(self, inputs, training=False):
         image = inputs
@@ -191,9 +192,11 @@ class VGG19Model(tf.keras.models.Model):
         output = self.block5_conv3(output)
         output = self.block5_conv4(output)
         output = self.block5_pool(output)
+
+        output = self.average_pool(output)
         output = self.flatten(output)
-        output = self.fc1(output)
-        output = self.fc2(output)
+        # output = self.fc1(output)
+        # output = self.fc2(output)
         output = self.fc3(output)
         return output
 
