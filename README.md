@@ -16,7 +16,8 @@ We support a range of meta-learning algorithms for classification including
 [ProtoNets](https://arxiv.org/abs/1703.05175),
 [UMTRA](https://arxiv.org/abs/1811.11819), 
 [LASIUM](https://arxiv.org/abs/2006.10236), 
-and [CACTUs](https://arxiv.org/pdf/1810.02334.pdf). 
+[CACTUs](https://arxiv.org/pdf/1810.02334.pdf),
+and [ANIL](https://arxiv.org/abs/1909.09157).
 We are adding more and happily welcome new contributions.
 
 For datasets, we support famous meta-learning benchmarks
