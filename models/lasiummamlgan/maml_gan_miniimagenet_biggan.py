@@ -125,12 +125,12 @@ if __name__ == '__main__':
         network_cls=VGG19Model,
         n=5,
         k_ml=1,
-        k_val_ml=1,
+        k_val_ml=5,
         k_val=1,
         k_val_val=15,
         k_test=1,
         k_val_test=15,
-        meta_batch_size=1,
+        meta_batch_size=4,
         num_steps_ml=1,
         lr_inner_ml=0.001,
         num_steps_validation=5,
@@ -147,5 +147,5 @@ if __name__ == '__main__':
 
     maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=5)
 
-    # maml_gan.train(iterations=60000)
+    maml_gan.train(iterations=60000)
     maml_gan.evaluate(50, seed=42, num_tasks=1000)
