@@ -112,7 +112,7 @@ if __name__ == '__main__':
     shape = (224, 224, 3)
     latent_dim = 120
     import os
-    os.environ['TFHUB_CACHE_DIR'] = '/home/siavash/tf_hub'
+    os.environ['TFHUB_CACHE_DIR'] = os.path.expanduser('~/tf_hub')
 
     gan = hub.load("https://tfhub.dev/deepmind/bigbigan-resnet50/1", tags=[]).signatures['generate']
     setattr(gan, 'parser', MiniImagenetParser(shape=shape))
