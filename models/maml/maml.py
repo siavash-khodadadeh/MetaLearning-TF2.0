@@ -236,16 +236,18 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         # self.create_meta_model_deprecated(self.updated_models[0], self.model, gradients)
         self.create_meta_model(self.updated_models[0], self.model, gradients)
 
+        losses = list()
         for k in range(1, num_iterations + 1):
             with tf.GradientTape(persistent=False) as train_tape:
                 train_tape.watch(self.updated_models[k - 1].meta_trainable_variables)
                 logits = self.updated_models[k - 1](train_ds, training=True)
                 loss = self.inner_loss(train_labels, logits)
+                losses.append(loss)
             gradients = train_tape.gradient(loss, self.updated_models[k - 1].meta_trainable_variables)
             # self.create_meta_model_deprecated(self.updated_models[k], self.updated_models[k - 1], gradients)
             self.create_meta_model(self.updated_models[k], self.updated_models[k - 1], gradients)
 
-        return self.updated_models[-1]
+        return self.updated_models[-1], losses
 
     def update_loss_and_accuracy(self, logits, labels, loss_metric, accuracy_metric):
         val_loss = self.outer_loss(labels, logits)
@@ -264,7 +266,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return val_acc, val_loss
 
-    def outer_loss(self, labels, logits):
+    def outer_loss(self, labels, logits, inner_losses=None):
         loss = tf.reduce_mean(
             tf.losses.categorical_crossentropy(labels, logits, from_logits=True)
         )
@@ -336,10 +338,10 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             train_ds = combine_first_two_axes(train_ds)
             val_ds = combine_first_two_axes(val_ds)
 
-            updated_model = self.inner_train_loop(train_ds, train_labels)
+            updated_model, inner_losses = self.inner_train_loop(train_ds, train_labels)
             # TODO test what happens when training=False
             updated_model_logits = updated_model(val_ds, training=True)
-            val_loss = self.outer_loss(val_labels, updated_model_logits)
+            val_loss = self.outer_loss(val_labels, updated_model_logits, inner_losses)
 
             predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
             real_labels = self.convert_labels_to_real_labels(val_labels)

@@ -131,6 +131,74 @@ class VGGSmallModel(tf.keras.models.Model):
         output = self.dense(output)
         return output
 
+class FiveLayerResNet(tf.keras.models.Model):
+    name = 'FiveLayerResNet'
+    def __init__(self, num_classes):
+        super(FiveLayerResNet, self).__init__(name='FiveLayerResNet')
+        self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
+        self.block1_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None,  padding='same', name='block1_conv1')
+        self.block1_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block1_bn1')
+        self.block1_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block1_conv2')
+        self.block1_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block1_bn2')
+
+        self.block2_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block2_conv1')
+        self.block2_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block2_bn1')
+        self.block2_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block2_conv2')
+        self.block2_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block2_bn2')
+
+        self.block3_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block3_conv1')
+        self.block3_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block3_bn1')
+        self.block3_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block3_conv2')
+        self.block3_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block3_bn2')
+
+        self.block4_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block4_conv1')
+        self.block4_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block4_bn1')
+        self.block4_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block4_conv2')
+        self.block4_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block4_bn2')
+
+        self.flatten = Flatten(name='flatten')
+        self.dense = Dense(num_classes, activation=None, name='dense')
+
+    def forward_res_block(self, inputs, conv1, bn1, conv2, bn2, training, use_shortcut=True):
+        output = inputs
+        shortcut = output
+        output = conv1(output)
+        output = bn1(output, training=training)
+        output = tf.keras.activations.relu(output)
+
+        output = conv2(output)
+        output = bn2(output, training=training)
+        output = tf.keras.activations.relu(output)
+        if use_shortcut:
+            output = output + shortcut
+
+        return output
+
+    def call(self, inputs, training=False):
+        output = inputs
+        output = self.forward_res_block(
+            inputs, self.block1_conv1, self.block1_bn1, self.block1_conv2, self.block1_bn2, training, use_shortcut=False
+        )
+        output = self.max_pool(output)
+
+        output = self.forward_res_block(
+            output, self.block2_conv1, self.block2_bn1, self.block2_conv2, self.block2_bn2, training
+        )
+        output = self.max_pool(output)
+
+        output = self.forward_res_block(
+            output, self.block3_conv1, self.block3_bn1, self.block3_conv2, self.block3_bn2, training
+        )
+        output = self.max_pool(output)
+
+        output = self.forward_res_block(
+            output, self.block4_conv1, self.block4_bn1, self.block4_conv2, self.block4_bn2, training
+        )
+        output = self.max_pool(output)
+        output = self.flatten(output)
+        output = self.dense(output)
+        return output
+
 
 class VGG19Model(tf.keras.models.Model):
     name = 'VGG19Model'

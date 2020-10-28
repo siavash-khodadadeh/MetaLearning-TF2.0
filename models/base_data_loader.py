@@ -1,6 +1,8 @@
 from typing import Dict, List
+import random
 
 import tensorflow as tf
+import tensorflow_hub as hub
 import numpy as np
 
 from utils import keep_keys_with_greater_than_equal_k_items
@@ -96,6 +98,138 @@ class BaseDataLoader(object):
         labels_dataset = labels_dataset.repeat(-1)
 
         return labels_dataset
+
+    def get_unsupervised_dataset(
+        self,
+        folders: Dict[str, List[str]],
+        n: int,
+        meta_batch_size: int,
+        one_hot_labels: bool = True,
+        reshuffle_each_iteration: bool = True,
+        seed: int = -1,
+        instance_parse_function=None
+    ):
+        k = 1
+        """This function generates a dataset that uses the same image for both training and validation"""
+        if instance_parse_function is None:
+            instance_parse_function = self.get_parse_function()
+
+        # TODO handle seed
+        if seed != -1:
+            np.random.seed(seed)
+
+        train_indices = [i // k + i % k * n for i in range(n * k)]
+        val_indices = [n * k + i // k + i % k * n for i in range(n * k)]
+
+        def generate_same_samples(instances):
+            new_instances = list()
+            for i in range(2 * k - 1):
+                new_instance = instances + tf.zeros_like(instances)
+                new_instances.append(new_instance)
+
+            new_instances = tf.concat(new_instances, axis=0)
+            all_instances = tf.concat((instances, new_instances), axis=0)
+            train_instances = tf.gather(all_instances, train_indices, axis=0)
+            val_instances = tf.gather(all_instances, val_indices, axis=0)
+
+            return (
+                tf.reshape(train_instances, (n, k, 84, 84, 3)),
+                tf.reshape(val_instances, (n, k, 84, 84, 3)),
+            )
+
+        instances = list()
+
+        for folder, folder_instances in folders.items():
+            instances.extend(folder_instances)
+
+        random.shuffle(instances)
+
+        dataset = tf.data.Dataset.from_tensor_slices(instances)
+        dataset = dataset.map(instance_parse_function)
+        # dataset = dataset.shuffle(buffer_size=len(instances))
+        dataset = dataset.shuffle(buffer_size=1000, reshuffle_each_iteration=reshuffle_each_iteration)
+
+        dataset = dataset.batch(n, drop_remainder=True)
+        dataset = dataset.map(generate_same_samples)
+
+        labels_dataset = self.make_labels_dataset(n, k, k, one_hot_labels=one_hot_labels)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+        dataset = dataset.batch(meta_batch_size)
+
+        setattr(dataset, 'steps_per_epoch', tf.data.experimental.cardinality(dataset))
+        return dataset
+
+    def get_umtra_dataset(
+        self,
+        folders: Dict[str, List[str]],
+        n: int,
+        k: int,
+        k_validation: int,
+        meta_batch_size: int,
+        one_hot_labels: bool = True,
+        reshuffle_each_iteration: bool = True,
+        seed: int = -1,
+        instance_parse_function=None
+    ):
+        if instance_parse_function is None:
+            instance_parse_function = self.get_parse_function()
+
+        # TODO handle seed
+        if seed != -1:
+            np.random.seed(seed)
+
+        handle = 'https://tfhub.dev/google/image_augmentation/nas_imagenet/1'
+        hub_model = hub.load(handle).signatures['from_decoded_images']
+
+        train_indices = [i // k + i % k * n for i in range(n * k)]
+        val_indices = [
+            n * k + i // k_validation + i % k_validation * n for i in range(n * k_validation)
+        ]
+
+        def generate_new_samples_with_auto_augment(instances):
+            new_instances = list()
+            for i in range(k + k_validation - 1):
+                new_instance = hub_model(
+                    images=instances,
+                    image_size=tf.constant([84, 84]),
+                    augmentation=tf.constant(True)
+                )['default']
+                new_instances.append(new_instance)
+
+            new_instances = tf.concat(new_instances, axis=0)
+            all_instances = tf.concat((instances, new_instances), axis=0)
+            train_instances = tf.gather(all_instances, train_indices, axis=0)
+            val_instances = tf.gather(all_instances, val_indices, axis=0)
+
+            return (
+                tf.reshape(train_instances, (n, k, *train_instances.shape[1:])),
+                tf.reshape(val_instances, (n, k_validation, *val_instances.shape[1:])),
+            )
+
+        instances = list()
+
+        for folder, folder_instances in folders.items():
+            instances.extend(folder_instances)
+
+        random.shuffle(instances)
+
+        dataset = tf.data.Dataset.from_tensor_slices(instances)
+        dataset = dataset.map(instance_parse_function)
+        # dataset = dataset.shuffle(buffer_size=len(instances))
+        dataset = dataset.shuffle(buffer_size=1000, reshuffle_each_iteration=reshuffle_each_iteration)
+        dataset = dataset.batch(n, drop_remainder=True)
+
+        dataset = dataset.map(generate_new_samples_with_auto_augment)
+        # dataset = dataset.map(generate_new_samples_with_augmentation)
+
+        labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
+
+        dataset = tf.data.Dataset.zip((dataset, labels_dataset))
+        dataset = dataset.batch(meta_batch_size)
+
+        setattr(dataset, 'steps_per_epoch', tf.data.experimental.cardinality(dataset))
+        return dataset
 
     def get_supervised_meta_learning_dataset(
             self,

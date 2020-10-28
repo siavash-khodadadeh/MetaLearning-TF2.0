@@ -50,6 +50,30 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
             return image / 255.
         return parse_function
 
+    def get_dataset_from_data_loader(
+            self,
+            database,
+            n,
+            k_ml,
+            k_validation,
+            one_hot_labels,
+            reshuffle_each_iteration,
+            seed
+    ):
+        dataset = self.data_loader.get_supervised_meta_learning_dataset(
+            database.train_folders,
+            n,
+            k_ml,
+            k_validation,
+            meta_batch_size=1,
+            one_hot_labels=one_hot_labels,
+            reshuffle_each_iteration=reshuffle_each_iteration,
+            seed=seed,
+            dtype=tf.string,
+            instance_parse_function=lambda x: x
+        )
+        return dataset
+
     def get_cross_domain_meta_learning_dataset(
             self,
             databases: List[Database],
@@ -65,17 +89,14 @@ class CombinedCrossDomainMetaLearning(ModelAgnosticMetaLearningModel):
         datasets = list()
         steps_per_epoch = 1000000
         for database in databases:
-            dataset = self.data_loader.get_supervised_meta_learning_dataset(
-                database.train_folders,
-                n,
-                k_ml,
-                k_validation,
-                meta_batch_size=1,
+            dataset = self.get_dataset_from_data_loader(
+                database=database,
+                n=n,
+                k_ml=k_ml,
+                k_validation=k_validation,
                 one_hot_labels=one_hot_labels,
                 reshuffle_each_iteration=reshuffle_each_iteration,
-                seed=seed,
-                dtype=tf.string,
-                instance_parse_function=lambda x: x
+                seed=seed
             )
             steps_per_epoch = min(steps_per_epoch, tf.data.experimental.cardinality(dataset))
             datasets.append(dataset)

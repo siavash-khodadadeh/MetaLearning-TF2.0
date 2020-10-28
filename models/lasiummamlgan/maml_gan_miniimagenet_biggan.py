@@ -7,7 +7,7 @@ from databases import OmniglotDatabase, MiniImagenetDatabase
 from models.lasiummamlgan.database_parsers import OmniglotParser, MiniImagenetParser
 from models.lasiummamlgan.gan import GAN
 from models.lasiummamlgan.maml_gan import MAMLGAN
-from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model
+from networks.maml_umtra_networks import SimpleModel, MiniImagenetModel, VGG19Model, FiveLayerResNet
 
 
 # Hub module info
@@ -108,8 +108,8 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
 
 
 if __name__ == '__main__':
-    mini_imagenet_database = MiniImagenetDatabase(input_shape=(224, 224, 3))
-    shape = (224, 224, 3)
+    mini_imagenet_database = MiniImagenetDatabase(input_shape=(84, 84, 3))
+    shape = (84, 84, 3)
     latent_dim = 120
     import os
     os.environ['TFHUB_CACHE_DIR'] = os.path.expanduser('~/tf_hub')
@@ -122,7 +122,7 @@ if __name__ == '__main__':
         latent_dim=latent_dim,
         generated_image_shape=shape,
         database=mini_imagenet_database,
-        network_cls=VGG19Model,
+        network_cls=FiveLayerResNet,
         n=5,
         k_ml=1,
         k_val_ml=5,
@@ -140,7 +140,7 @@ if __name__ == '__main__':
         log_train_images_after_iteration=200,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='mini_imagenet_p1_vgg19',
+        experiment_name='mini_imagenet_p1_resnet',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
