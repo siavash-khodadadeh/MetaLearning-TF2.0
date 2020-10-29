@@ -108,8 +108,8 @@ class MiniImageNetMAMLBigGan(MAMLGAN):
 
 
 if __name__ == '__main__':
-    mini_imagenet_database = MiniImagenetDatabase(input_shape=(84, 84, 3))
-    shape = (84, 84, 3)
+    mini_imagenet_database = MiniImagenetDatabase(input_shape=(224, 224, 3))
+    shape = (224, 224, 3)
     latent_dim = 120
     import os
     os.environ['TFHUB_CACHE_DIR'] = os.path.expanduser('~/tf_hub')
@@ -131,7 +131,7 @@ if __name__ == '__main__':
         k_test=1,
         k_val_test=15,
         meta_batch_size=4,
-        num_steps_ml=1,
+        num_steps_ml=5,
         lr_inner_ml=0.001,
         num_steps_validation=5,
         save_after_iterations=1000,
