@@ -135,7 +135,7 @@ if __name__ == '__main__':
         lr_inner_ml=0.001,
         num_steps_validation=5,
         save_after_iterations=1000,
-        meta_learning_rate=0.001,
+        meta_learning_rate=0.0001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
         num_tasks_val=100,

@@ -162,10 +162,10 @@ class FiveLayerResNet(tf.keras.models.Model):
         self.block5_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block5_conv2')
         self.block5_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block5_bn2')
 
-        self.block6_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block6_conv1')
-        self.block6_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block6_bn1')
-        self.block6_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block6_conv2')
-        self.block6_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block6_bn2')
+        # self.block6_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block6_conv1')
+        # self.block6_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block6_bn1')
+        # self.block6_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block6_conv2')
+        # self.block6_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block6_bn2')
 
         self.flatten = Flatten(name='flatten')
         self.dense = Dense(num_classes, activation=None, name='dense')
@@ -212,9 +212,9 @@ class FiveLayerResNet(tf.keras.models.Model):
         )
         output = self.max_pool(output)
 
-        output = self.forward_res_block(
-            output, self.block6_conv1, self.block6_bn1, self.block6_conv2, self.block6_bn2, training
-        )
+        # output = self.forward_res_block(
+        #     output, self.block6_conv1, self.block6_bn1, self.block6_conv2, self.block6_bn2, training
+        # )
         output = self.average_pool(output)
         output = self.flatten(output)
         output = self.dense(output)
