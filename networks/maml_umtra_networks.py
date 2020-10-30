@@ -135,7 +135,7 @@ class FiveLayerResNet(tf.keras.models.Model):
     name = 'FiveLayerResNet'
     def __init__(self, num_classes):
         super(FiveLayerResNet, self).__init__(name='FiveLayerResNet')
-        self.average_pool = tf.keras.layers.AveragePooling2D(pool_size=(7, 7))
+        self.global_max_pool = tf.keras.layers.GlobalMaxPooling2D()
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
         self.block1_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None,  padding='same', name='block1_conv1')
         self.block1_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block1_bn1')
@@ -157,10 +157,10 @@ class FiveLayerResNet(tf.keras.models.Model):
         self.block4_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block4_conv2')
         self.block4_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block4_bn2')
 
-        self.block5_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block5_conv1')
-        self.block5_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block5_bn1')
-        self.block5_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block5_conv2')
-        self.block5_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block5_bn2')
+        # self.block5_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block5_conv1')
+        # self.block5_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block5_bn1')
+        # self.block5_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block5_conv2')
+        # self.block5_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block5_bn2')
 
         # self.block6_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block6_conv1')
         # self.block6_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block6_bn1')
@@ -207,15 +207,15 @@ class FiveLayerResNet(tf.keras.models.Model):
         )
         output = self.max_pool(output)
 
-        output = self.forward_res_block(
-            output, self.block5_conv1, self.block5_bn1, self.block5_conv2, self.block5_bn2, training
-        )
-        output = self.max_pool(output)
+        # output = self.forward_res_block(
+        #     output, self.block5_conv1, self.block5_bn1, self.block5_conv2, self.block5_bn2, training
+        #)
+        # output = self.max_pool(output)
 
         # output = self.forward_res_block(
         #     output, self.block6_conv1, self.block6_bn1, self.block6_conv2, self.block6_bn2, training
         # )
-        output = self.average_pool(output)
+        output = self.global_max_pool(output)
         output = self.flatten(output)
         output = self.dense(output)
         return output
