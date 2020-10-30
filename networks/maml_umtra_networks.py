@@ -137,9 +137,9 @@ class FiveLayerResNet(tf.keras.models.Model):
         super(FiveLayerResNet, self).__init__(name='FiveLayerResNet')
         self.global_max_pool = tf.keras.layers.GlobalMaxPooling2D()
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2))
-        self.block1_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None,  padding='same', name='block1_conv1')
+        self.block1_conv1 = tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), activation=None,  padding='valid', name='block1_conv1')
         self.block1_bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block1_bn1')
-        self.block1_conv2 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block1_conv2')
+        self.block1_conv2 = tf.keras.layers.Conv2D(64, (3, 3), strides=(2, 2), activation=None, padding='valid', name='block1_conv2')
         self.block1_bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='block1_bn2')
 
         self.block2_conv1 = tf.keras.layers.Conv2D(64, (3, 3), activation=None, padding='same', name='block2_conv1')
