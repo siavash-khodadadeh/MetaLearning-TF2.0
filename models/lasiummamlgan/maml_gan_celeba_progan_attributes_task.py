@@ -25,7 +25,7 @@ class MAMLGANProGAN(MAMLGAN):
         vectors = list()
 
         vectors.append(class_vectors)
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=0.08)
             new_vectors += noise
@@ -40,7 +40,7 @@ class MAMLGANProGAN(MAMLGAN):
         vectors = list()
 
         vectors.append(class_vectors)
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
             noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1)
             noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
@@ -57,7 +57,7 @@ class MAMLGANProGAN(MAMLGAN):
         vectors = list()
         vectors.append(z)
 
-        for i in range(self.k + self.k_val_ml - 1):
+        for i in range(self.k_ml + self.k_val_ml - 1):
             if (i + 1) % self.n == 0:
                 new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0.03)
                 vectors.append(new_z)
@@ -77,18 +77,18 @@ class MAMLGANProGAN(MAMLGAN):
     def get_val_dataset(self):
         val_dataset = self.database.get_attributes_task_dataset(
             partition='val',
-            k=self.k_val_train,
+            k=self.k_val,
             k_val=self.k_val_val,
             meta_batch_size=1,
             parse_fn=self.gan.parser.get_parse_fn(),
             seed=self.val_seed
         )
         val_dataset = val_dataset.repeat(-1)
-        val_dataset = val_dataset.take(self.number_of_tasks_val)
-        setattr(val_dataset, 'steps_per_epoch', self.number_of_tasks_val)
+        val_dataset = val_dataset.take(self.num_tasks_val)
+        setattr(val_dataset, 'steps_per_epoch', self.num_tasks_val)
         return val_dataset
 
-    def get_test_dataset(self, seed=-1):
+    def get_test_dataset(self,num_tasks, seed=-1):
         # dataset = super(MAMLGANProGAN, self).get_test_dataset(seed=seed)
         test_dataset = self.database.get_attributes_task_dataset(
             partition='test',
@@ -99,9 +99,9 @@ class MAMLGANProGAN(MAMLGAN):
             seed=seed
         )
         test_dataset = test_dataset.repeat(-1)
-        test_dataset = test_dataset.take(self.number_of_tasks_test)
+        test_dataset = test_dataset.take(num_tasks)
 
-        setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
+        setattr(test_dataset, 'steps_per_epoch', num_tasks)
         return test_dataset
 
 
@@ -119,9 +119,9 @@ if __name__ == '__main__':
         database=celeba_database,
         network_cls=MiniImagenetModel,
         n=2,  # n=2
-        k=1,
+        k_ml=1,
         k_val_ml=5,
-        k_val_train=5,
+        k_val=5,
         k_val_val=5,
         k_test=5,  # k_test=5
         k_val_test=5,  # k_val_test=5
@@ -133,10 +133,9 @@ if __name__ == '__main__':
         meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='celeba_attributes_p1_std_0.08_vectors_compressed',
+        experiment_name='celeba_attributes_p1_std_0.5',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
@@ -157,4 +156,4 @@ if __name__ == '__main__':
     # from 90K go with 1e-4
     # 105K works the best based on validation accuracy
     maml_gan.train(iterations=120000)
-    maml_gan.evaluate(50, seed=42, iterations_to_load_from=105000)
+    maml_gan.evaluate(50, num_tasks=1000, seed=42, iterations_to_load_from=105000)

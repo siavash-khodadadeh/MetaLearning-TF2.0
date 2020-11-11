@@ -26,3 +26,5 @@ if __name__ == '__main__':
     plt.xlabel('Iterations', fontsize=16)
     plt.ylabel('Accuracy', fontsize=16)
     plt.show()
+    plt.imshow
+
