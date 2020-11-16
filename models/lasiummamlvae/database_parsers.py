@@ -37,7 +37,20 @@ class MiniImagenetParser(BaseParser):
 
         return parse
 
+
 class CelebAParser(BaseParser):
+    def get_attr_parse_fn(self):
+        @tf.function
+        def parse(example_address):
+            example_address = example_address[0]
+            image = tf.image.decode_png(tf.io.read_file(example_address))
+            image = tf.reshape(tf.image.resize(image, self.shape[:2]), self.shape)
+            image = tf.cast(image, tf.float32)
+
+            return image / 255.
+
+        return parse
+
     def get_parse_fn(self):
         @tf.function
         def parse(example_address):

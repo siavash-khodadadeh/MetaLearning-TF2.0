@@ -29,32 +29,35 @@ class MAMLVAECelebA(MAML_VAE):
 
         return new_z
 
-    # def get_val_dataset(self):
-    #     val_dataset = self.database.get_attributes_task_dataset(
-    #         partition='val',
-    #         k=self.k_val_train,
-    #         k_val=self.k_val_val,
-    #         meta_batch_size=1,
-    #         seed=self.val_seed
-    #     )
-    #     val_dataset = val_dataset.repeat(-1)
-    #     val_dataset = val_dataset.take(self.number_of_tasks_val)
-    #     setattr(val_dataset, 'steps_per_epoch', self.number_of_tasks_val)
-    #     return val_dataset
+    def get_val_dataset(self):
+        val_dataset = self.database.get_attributes_task_dataset(
+            partition='val',
+            k=self.k_val,
+            k_val=self.k_val_val,
+            meta_batch_size=1,
+            parse_fn=self.vae.parser.get_attr_parse_fn(),
+            seed=self.val_seed
+        )
+        val_dataset = val_dataset.repeat(-1)
+        val_dataset = val_dataset.take(self.num_tasks_val)
+        setattr(val_dataset, 'steps_per_epoch', self.num_tasks_val)
+        return val_dataset
 
-    # def get_test_dataset(self, seed=-1):
-    #     # dataset = super(MAMLGANProGAN, self).get_test_dataset(seed=seed)
-    #     test_dataset = self.database.get_attributes_task_dataset(
-    #         partition='test',
-    #         k=self.k_test,
-    #         k_val=self.k_val_test,
-    #         meta_batch_size=1,
-    #         seed=seed
-    #     )
-    #     test_dataset = test_dataset.repeat(-1)
-    #     test_dataset = test_dataset.take(self.number_of_tasks_test)
-    #     setattr(test_dataset, 'steps_per_epoch', self.number_of_tasks_test)
-    #     return test_dataset
+    def get_test_dataset(self, num_tasks, seed=-1):
+        # dataset = super(MAMLGANProGAN, self).get_test_dataset(seed=seed)
+        test_dataset = self.database.get_attributes_task_dataset(
+            partition='test',
+            k=self.k_test,
+            k_val=self.k_val_test,
+            meta_batch_size=1,
+            parse_fn=self.vae.parser.get_attr_parse_fn(),
+            seed=seed
+        )
+        test_dataset = test_dataset.repeat(-1)
+        test_dataset = test_dataset.take(num_tasks)
+
+        setattr(test_dataset, 'steps_per_epoch', num_tasks)
+        return test_dataset
 
 
 def get_encoder(latent_dim):
@@ -148,13 +151,13 @@ if __name__ == '__main__':
 
     maml_vae = MAMLVAECelebA(
         vae=vae,
-        latent_algorithm='p3',
+        latent_algorithm='p1',
         database=celebalot_database,
         network_cls=MiniImagenetModel,
         n=2,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
-        k_val_train=5,
+        k_val=5,
         k_val_val=5,
         k_test=5,
         k_val_test=5,
@@ -166,8 +169,7 @@ if __name__ == '__main__':
         meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         experiment_name='celeba_better_vae2',
         val_seed=42,
@@ -180,4 +182,4 @@ if __name__ == '__main__':
     maml_vae.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
 
     maml_vae.train(iterations=8000)
-    maml_vae.evaluate(50, seed=42)
+    maml_vae.evaluate(50, num_tasks=2, seed=42)
