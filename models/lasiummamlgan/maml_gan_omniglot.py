@@ -70,8 +70,8 @@ if __name__ == '__main__':
         d_learning_rate=0.0003,
         g_learning_rate=0.0003,
     )
-    gan.perform_training(epochs=500, checkpoint_freq=50)
-    gan.load_latest_checkpoint()
+    # gan.perform_training(epochs=49, checkpoint_freq=1)
+    gan.load_latest_checkpoint(epoch_to_load_from='500')
 
     maml_gan = MAMLGAN(
         gan=gan,
@@ -80,8 +80,9 @@ if __name__ == '__main__':
         database=omniglot_database,
         network_cls=SimpleModel,
         n=5,
-        k=1,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
         k_val_test=15,
         k_test=1,
@@ -93,15 +94,25 @@ if __name__ == '__main__':
         meta_learning_rate=0.001,
         report_validation_frequency=200,
         log_train_images_after_iteration=200,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=False,
-        experiment_name='omniglot_p1_0.5_shift_a',
+        epsilon=246.09375,
+        experiment_name='omniglot_p1_0.5_epsilon_246.09375',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
 
-    # maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=2)
+    # for checkpoint in ('00', '10', '30', '50', '100', '200', '300', '400', '500'):
+    #     gan.load_latest_checkpoint(epoch_to_load_from=checkpoint)
+    #     import tensorflow as tf
+    #     tf.random.set_seed(None)
+    #      maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=1, checkpoint=checkpoint)
+    #  exit()
+
+    print(maml_gan.epsilon)
+    maml_gan.visualize_meta_learning_task(shape, num_tasks_to_visualize=1)
 
     maml_gan.train(iterations=1000)
-    maml_gan.evaluate(50, seed=42)
+    maml_gan.evaluate(50, num_tasks=1000, seed=42)
+    print(maml_gan.epsilon)
+    print(maml_gan.num_epsilon_ignore)

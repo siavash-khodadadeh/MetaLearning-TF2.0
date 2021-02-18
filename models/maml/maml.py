@@ -43,6 +43,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         val_test_batch_norm_momentum=0.0,
         val_database=None,
         test_database=None,
+        first_order=False,
     ):
         super(ModelAgnosticMetaLearningModel, self).__init__(
             database=database,
@@ -67,6 +68,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             test_database=test_database
         )
 
+        self.first_order = first_order
         self.num_steps_ml = num_steps_ml
         self.num_steps_validation = num_steps_validation
         self.lr_inner_ml = lr_inner_ml
@@ -245,6 +247,8 @@ class ModelAgnosticMetaLearningModel(BaseModel):
                 losses.append(loss)
             gradients = train_tape.gradient(loss, self.updated_models[k - 1].meta_trainable_variables)
             # self.create_meta_model_deprecated(self.updated_models[k], self.updated_models[k - 1], gradients)
+            if self.first_order:
+                gradients = [tf.stop_gradient(grad) for grad in gradients]
             self.create_meta_model(self.updated_models[k], self.updated_models[k - 1], gradients)
 
         return self.updated_models[-1], losses

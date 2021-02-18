@@ -24,6 +24,10 @@ class OmniglotDatabase(JPGParseMixin, Database):
             input_shape=(28, 28, 1)
         )
 
+    def get_config_info(self):
+        config_str = super(OmniglotDatabase, self).get_config_info()
+        return config_str + f', num_train_classes: {self.num_train_classes}, num_val_classes: {self.num_val_classes}'
+
     def get_train_val_test_folders(self) -> Tuple:
         alphabets = list()
         for item in ('images_background', 'images_evaluation'):

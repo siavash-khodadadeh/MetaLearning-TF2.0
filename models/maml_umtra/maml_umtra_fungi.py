@@ -1,12 +1,14 @@
-from models.maml.maml import ModelAgnosticMetaLearningModel
+from databases import CelebADatabase, FungiDatabase
+from models.maml_umtra.maml_umtra import MAMLUMTRA
 from networks.maml_umtra_networks import MiniImagenetModel
-from databases import FungiDatabase
 
+if __name__ == '__main__':
+    # import tensorflow as tf
+    # tf.config.experimental_run_functions_eagerly(True)
 
-def run_fungi():
     fungi_database = FungiDatabase()
 
-    maml = ModelAgnosticMetaLearningModel(
+    maml_umtra = MAMLUMTRA(
         database=fungi_database,
         network_cls=MiniImagenetModel,
         n=5,
@@ -20,21 +22,19 @@ def run_fungi():
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=15000,
+        save_after_iterations=1000,
         meta_learning_rate=0.001,
-        report_validation_frequency=1000,
+        report_validation_frequency=250,
         log_train_images_after_iteration=1000,
         num_tasks_val=100,
         clip_gradients=True,
         experiment_name='fungi',
         val_seed=42,
-        val_test_batch_norm_momentum=0.0,
+        val_test_batch_norm_momentum=0.0
     )
 
-    maml.train(iterations=15000)
-    maml.evaluate(50, seed=42, num_tasks=1000, use_val_batch_statistics=True)
-    # maml.evaluate(50, seed=42, use_val_batch_statistics=False)
+    shape = (84, 84, 3)
+    maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
 
-
-if __name__ == '__main__':
-    run_fungi()
+    maml_umtra.train(iterations=3000)
+    maml_umtra.evaluate(50, num_tasks=1000, seed=42)

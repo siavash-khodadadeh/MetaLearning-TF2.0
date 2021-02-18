@@ -22,6 +22,7 @@ class Database(ABC):
         self.raw_database_address = raw_database_address
         self.database_address = database_address
         self.input_shape = input_shape
+        self.random_seed = random_seed
 
         if random_seed != -1:
             random.seed(random_seed)
@@ -34,6 +35,9 @@ class Database(ABC):
 
         if random_seed != -1:
             random.seed(None)
+
+    def get_config_info(self):
+        return f'shape: {self.input_shape}, random_seed: {self.random_seed}'
 
     def convert_to_dict(self, folders):
         if type(folders) == list:

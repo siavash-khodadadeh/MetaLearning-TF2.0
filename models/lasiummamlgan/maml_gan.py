@@ -1,15 +1,24 @@
+import os
+
 import tensorflow as tf
+import numpy as np
 import tensorflow_addons as tfa
+
+import settings
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from utils import combine_first_two_axes
 
 
 class MAMLGAN(ModelAgnosticMetaLearningModel):
-    def __init__(self, gan, latent_dim, generated_image_shape, *args, **kwargs):
+    def __init__(self, gan, latent_dim, generated_image_shape, epsilon=0.0, *args, **kwargs):
         super(MAMLGAN, self).__init__(*args, **kwargs)
         self.gan = gan
         self.latent_dim = latent_dim
         self.generated_image_shape = generated_image_shape
+        self.tri_mask = np.ones(self.n ** 2, dtype=np.bool).reshape(self.n, self.n)
+        self.tri_mask[np.diag_indices(self.n)] = False
+        self.num_epsilon_ignore = 0
+        self.epsilon = epsilon
 
     def get_network_name(self):
         return self.model.name
@@ -17,12 +26,16 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
     def get_parse_function(self):
         return self.gan.parser.get_parse_fn()
 
-    def visualize_meta_learning_task(self, shape, num_tasks_to_visualize=1):
+    def visualize_meta_learning_task(self, shape, num_tasks_to_visualize=1, checkpoint=0):
         import matplotlib.pyplot as plt
 
         dataset = self.get_train_dataset()
         for item in dataset.repeat(-1).take(num_tasks_to_visualize):
             fig, axes = plt.subplots(self.k_ml + self.k_val_ml, self.n)
+            for i in range(len(axes)):
+                for j in range(len(axes[i])):
+                    axes[i][j].axis('off')
+
             fig.set_figwidth(self.n)
             fig.set_figheight(self.k_ml + self.k_val_ml)
 
@@ -43,8 +56,33 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
 
             plt.show()
 
+        # for seed in (30445933, 22258032, 66161140, 97465797, 66869316, 17408863):
+        # for seed in (22258032, ):
+        #    print(seed)
+        #    vectors = tf.random.normal((1, self.latent_dim), seed=seed)
+        #    images = self.gan.generator(vectors)
+        #    plt.imshow(images[0, ..., -1], cmap='gray')
+        #    # plt.show()
+        #    plt.savefig(
+        #        os.path.join(settings.PROJECT_ROOT_ADDRESS, f'plots/lasium_paper/gan_images/{checkpoint}_4')
+        #    )
+
+    def squared_dist(self, m):
+        expanded_a = tf.expand_dims(m, 1)
+        expanded_b = tf.expand_dims(m, 0)
+        distances = tf.reduce_sum(tf.math.squared_difference(expanded_a, expanded_b), 2)
+        return distances
+
     def generate_all_vectors_p1(self):
-        class_vectors = tf.random.normal((self.n, self.latent_dim))
+        while True:
+            class_vectors = tf.random.normal((self.n, self.latent_dim))
+            dist = self.squared_dist(class_vectors)
+            elements = tf.boolean_mask(dist, self.tri_mask)
+            if tf.reduce_min(elements) > self.epsilon:
+                break
+            else:
+                self.num_epsilon_ignore += 1
+
         # class_vectors = class_vectors / tf.reshape(tf.norm(class_vectors, axis=1), (class_vectors.shape[0], 1))
         vectors = list()
 
@@ -144,16 +182,20 @@ class MAMLGAN(ModelAgnosticMetaLearningModel):
             val_ds = images[:, self.n * self.k_ml:, ...]
             val_ds = combine_first_two_axes(val_ds)
             # Process val if needed
-            # val_imgs = list()
-            # for i in range(val_ds.shape[0]):
-            #     val_image = val_ds[i, ...]
-            #     tx = tf.random.uniform((), -5, 5, dtype=tf.int32)
-            #     ty = tf.random.uniform((), -5, 5, dtype=tf.int32)
-            #     transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
-            #     val_image = tfa.image.transform(val_image, transforms, 'NEAREST')
-            #     val_imgs.append(val_image)
-            #
-            # val_ds = tf.stack(val_imgs, axis=0)
+            val_imgs = list()
+            for i in range(val_ds.shape[0]):
+                val_image = val_ds[i, ...]
+                tx = tf.random.uniform((), -5, 5, dtype=tf.int32)
+                ty = tf.random.uniform((), -15, 15, dtype=tf.int32)
+                transforms = [1, 0, -tx, 0, 1, -ty, 0, 0]
+                val_image = tfa.image.transform(val_image, transforms, 'NEAREST')
+
+                val_image = tf.image.random_crop(val_image, size=(64, 64, 3))
+                val_imgs.append(val_image)
+
+            val_ds = tf.stack(val_imgs, axis=0)
+            val_ds = tf.image.resize(val_ds, size=(84, 84))
+            # process stops here
 
             val_ds = tf.reshape(val_ds, (self.meta_batch_size, self.n * self.k_val_ml, *self.generated_image_shape))
             val_ds = tf.gather(val_ds, val_indices, axis=1)

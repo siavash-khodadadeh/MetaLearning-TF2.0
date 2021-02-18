@@ -5,11 +5,13 @@ import time
 from functools import partial
 from random import random
 import os
+import shutil
 
 from tensorflow.keras.layers import *
 from tensorflow.keras.models import *
 from tensorflow.keras.optimizers import *
 from tensorflow.keras.initializers import *
+from tqdm import tqdm
 import tensorflow as tf
 import tensorflow.keras.backend as K
 
@@ -20,7 +22,8 @@ from stylegan.conv_mod import *
 im_size = 64
 latent_size = 512
 BATCH_SIZE = 16
-directory = "/home/sharare/datasets/mini-imagenet/train"
+
+directory = os.path.join(settings.FUNGI_RAW_DATASET_ADDRESS, 'fungi_train_val/images')
 
 cha = 24
 
@@ -340,7 +343,7 @@ class GAN(object):
 
 class StyleGAN(object):
 
-    def __init__(self, steps = 1, lr = 0.0001, decay = 0.00001, silent = True):
+    def __init__(self, steps = 1, lr = 0.0001, decay = 0.00001, silent = True, training=True):
 
         #Init GAN and Eval Models
         self.GAN = GAN(steps = steps, lr = lr, decay = decay)
@@ -350,7 +353,8 @@ class StyleGAN(object):
         self.GAN.G.summary()
 
         #Data generator (my own code, not from TF 2.0)
-        self.im = dataGenerator(directory, im_size, flip = True)
+        if training:
+            self.im = dataGenerator(directory, im_size, flip = True)
 
         #Set up variables
         self.lastblip = time.clock()
@@ -648,6 +652,8 @@ class StyleGAN(object):
 
 
 if __name__ == "__main__":
+    os.makedirs(os.path.join(settings.PROJECT_ROOT_ADDRESS, 'stylegan/Results'), exist_ok=True)
+    os.makedirs(os.path.join(settings.PROJECT_ROOT_ADDRESS, 'stylegan/pretrained_models'), exist_ok=True)
     model = StyleGAN(lr = 0.0001, silent = False)
     model.evaluate(0)
     # model.evaluate(0)

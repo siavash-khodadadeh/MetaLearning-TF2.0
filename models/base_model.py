@@ -1,6 +1,7 @@
 import os
 import sys
 from abc import abstractmethod
+import json
 
 import tensorflow as tf
 import numpy as np
@@ -14,6 +15,15 @@ class SetupCaller(type):
     def __call__(cls, *args, **kwargs):
         obj = type.__call__(cls, *args, **kwargs)
         obj.setup()
+        config_json_path = os.path.join(obj.get_root(), obj.get_config_info(), 'config.json')
+
+        kwargs['database'] = kwargs['database'].get_config_info()
+        kwargs['network_cls'] = kwargs['network_cls'].name
+        config_dict = {'args': args, 'kwargs': kwargs}
+
+        with open(config_json_path, 'w') as config_json_file:
+            json.dump(config_dict, config_json_file)
+
         return obj
 
 

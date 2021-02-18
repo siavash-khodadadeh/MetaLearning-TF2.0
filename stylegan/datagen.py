@@ -64,7 +64,11 @@ class dataGenerator(object):
         names = []
 
         for dirpath, dirnames, filenames in os.walk(folder):
-            for filename in [f for f in filenames if (f.endswith(".jpg") or f.endswith(".png") or f.endswith(".JPEG"))]:
+            for filename in [
+                f for f in filenames if (
+                    f.endswith(".jpg") or f.endswith(".png") or f.endswith(".JPEG") or f.endswith('.JPG')
+                )
+            ]:
                 fname = os.path.join(dirpath, filename)
                 names.append(fname)
 

@@ -147,22 +147,37 @@ class GAN(tf.keras.models.Model):
         return self.get_dataset(partition='train')
 
     def load_latest_checkpoint(self, epoch_to_load_from=None):
-        latest_checkpoint = tf.train.latest_checkpoint(
-            os.path.join(
+        if epoch_to_load_from is None:
+            latest_checkpoint = tf.train.latest_checkpoint(
+                os.path.join(
+                    settings.PROJECT_ROOT_ADDRESS,
+                    'models',
+                    'lasiummamlgan',
+                    'gan',
+                    self.get_gan_name(),
+                    'gan_checkpoints'
+                )
+            )
+
+        else:
+            latest_checkpoint = os.path.join(
                 settings.PROJECT_ROOT_ADDRESS,
                 'models',
                 'lasiummamlgan',
                 'gan',
                 self.get_gan_name(),
-                'gan_checkpoints'
+                'gan_checkpoints',
+                f'gan_{epoch_to_load_from}'
             )
-        )
+
+        print(f'loading GAN from {latest_checkpoint}')
 
         if latest_checkpoint is not None:
             self.load_weights(latest_checkpoint)
             epoch = int(latest_checkpoint[latest_checkpoint.rfind('_') + 1:])
             return epoch
 
+        print('no previous checkpoint found for GAN.')
         return -1
 
     def perform_training(self, epochs, checkpoint_freq=100, vis_callback_cls=None):

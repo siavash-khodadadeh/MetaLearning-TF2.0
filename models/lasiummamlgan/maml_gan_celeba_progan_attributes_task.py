@@ -15,7 +15,7 @@ class MAMLGANProGAN(MAMLGAN):
     def get_images_from_vectors(self, vectors):
         return self.gan(vectors)['default']
 
-    def generate_all_vectors(self):
+    def generate_all_vectors_p1(self):
         # vector = tf.random.normal((1, latent_dim))
         # vector2 = -vector
         # class_vectors = tf.concat((vector, vector2), axis=0)
@@ -27,7 +27,7 @@ class MAMLGANProGAN(MAMLGAN):
         vectors.append(class_vectors)
         for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
-            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=0.08)
+            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=0.25)
             new_vectors += noise
             new_vectors = new_vectors / tf.reshape(tf.norm(new_vectors, axis=1), (new_vectors.shape[0], 1))
             vectors.append(new_vectors)
@@ -42,35 +42,61 @@ class MAMLGANProGAN(MAMLGAN):
         vectors.append(class_vectors)
         for i in range(self.k_ml + self.k_val_ml - 1):
             new_vectors = class_vectors
-            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1)
+            noise = tf.random.normal(shape=class_vectors.shape, mean=0, stddev=1.0)
             noise = noise / tf.reshape(tf.norm(noise, axis=1), (noise.shape[0], 1))
 
-            new_vectors = new_vectors + (noise - new_vectors) * 0.6
+            new_vectors = new_vectors + (noise - new_vectors) * 0.5
 
             vectors.append(new_vectors)
 
         return vectors
 
-    def generate_all_vectors_p3(self):
+    # def generate_all_vectors(self):
+    #     z = tf.random.normal((self.n, self.latent_dim))
+    #
+    #     vectors = list()
+    #     vectors.append(z)
+    #
+    #     for i in range(self.k_ml + self.k_val_ml - 1):
+    #         # if (i + 1) % self.n == 0:
+    #         #     new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0)
+    #         #     vectors.append(new_z)
+    #         # else:
+    #         new_z = tf.stack(
+    #             [
+    #                 z[0, ...] + (z[(i + 1) % self.n, ...] - z[0, ...]) * tf.random.uniform(shape=(1, ), minval=1.0, maxval=1.0),
+    #                 z[1, ...] + (z[(i + 2) % self.n, ...] - z[1, ...]) * tf.random.uniform(shape=(1, ), minval=1.0, maxval=1.0),
+    #                 # z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.5,
+    #                 # z[3, ...] + (z[(i + 4) % self.n, ...] - z[3, ...]) * 0.5,
+    #                 # z[4, ...] + (z[(i + 5) % self.n, ...] - z[4, ...]) * 0.5
+    #             ],
+    #             axis=0
+    #         )
+    #         vectors.append(new_z)
+    #
+    #     return vectors
+    def generate_all_vectors(self):
         z = tf.random.normal((self.n, self.latent_dim))
 
         vectors = list()
         vectors.append(z)
 
         for i in range(self.k_ml + self.k_val_ml - 1):
-            if (i + 1) % self.n == 0:
-                new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0.03)
-                vectors.append(new_z)
-            else:
-                new_z = tf.stack(
-                    [
-                        z[0, ...] + (z[(i + 1) % self.n, ...] - z[0, ...]) * 0.37,
-                        z[1, ...] + (z[(i + 2) % self.n, ...] - z[1, ...]) * 0.37,
-                        z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.37,
-                    ],
-                    axis=0
-                )
-                vectors.append(new_z)
+            # if (i + 1) % self.n == 0:
+            #     new_z = z + tf.random.normal(shape=z.shape, mean=0, stddev=0)
+            #     vectors.append(new_z)
+            # else:
+            new_z = tf.stack(
+                [
+                    z[0, ...] + (z[1, ...] - z[0, ...]) * (0.25 + 0.05 * i),
+                    z[1, ...] + (z[0, ...] - z[1, ...]) * (0.25 + 0.05 * i),
+                    # z[2, ...] + (z[(i + 3) % self.n, ...] - z[2, ...]) * 0.5,
+                    # z[3, ...] + (z[(i + 4) % self.n, ...] - z[3, ...]) * 0.5,
+                    # z[4, ...] + (z[(i + 5) % self.n, ...] - z[4, ...]) * 0.5
+                ],
+                axis=0
+            )
+            vectors.append(new_z)
 
         return vectors
 
@@ -118,13 +144,13 @@ if __name__ == '__main__':
         generated_image_shape=shape,
         database=celeba_database,
         network_cls=MiniImagenetModel,
-        n=2,  # n=2
+        n=2,  # n=2 for attributes
         k_ml=1,
         k_val_ml=5,
         k_val=5,
         k_val_val=5,
-        k_test=5,  # k_test=5
-        k_val_test=5,  # k_val_test=5
+        k_test=5,  # k_test=5 for attributes
+        k_val_test=5,  # k_val_test=5 for attributes
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -135,7 +161,7 @@ if __name__ == '__main__':
         log_train_images_after_iteration=200,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='celeba_attributes_p1_std_0.5',
+        experiment_name='celeba_attributes_p3_alpha_variable_augment',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
@@ -155,5 +181,5 @@ if __name__ == '__main__':
     #  70k with 5e-4
     # from 90K go with 1e-4
     # 105K works the best based on validation accuracy
-    maml_gan.train(iterations=120000)
-    maml_gan.evaluate(50, num_tasks=1000, seed=42, iterations_to_load_from=105000)
+    maml_gan.train(iterations=10000)
+    maml_gan.evaluate(5, num_tasks=1000, seed=42, iterations_to_load_from=1000)
