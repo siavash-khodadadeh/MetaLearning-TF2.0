@@ -155,7 +155,7 @@ class BaseDataLoader(object):
         labels_dataset = self.make_labels_dataset(n, k, k, one_hot_labels=one_hot_labels)
 
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(meta_batch_size)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', tf.data.experimental.cardinality(dataset))
         return dataset

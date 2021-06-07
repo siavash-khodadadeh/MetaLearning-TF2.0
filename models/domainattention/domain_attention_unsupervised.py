@@ -83,12 +83,12 @@ def run_domain_attention():
         VGGFlowerDatabase()
     ]
     meta_train_domain_databases = [
-        AirplaneDatabase(),
-        # FungiDatabase(),
+        # AirplaneDatabase(),
+        FungiDatabase(),
         # CUBDatabase(),
     ]
 
-    test_database = AirplaneDatabase()
+    test_database = FungiDatabase()
 
     da = DomainAttentionUnsupervised(
         train_databases=train_domain_databases,

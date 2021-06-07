@@ -67,4 +67,4 @@ plt.subplots_adjust(bottom=0.1, top=0.9, right= 0.98, left=0.1)
 
 plt.legend(loc='best')
 # plt.show()
-plt.savefig('./outputs/accuracy_based_on_gan.pdf')
+plt.savefig('./outputs/accuracy_based_on_gan.pdf', dpi=300)
