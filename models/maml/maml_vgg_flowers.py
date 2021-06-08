@@ -25,7 +25,7 @@ def run_vgg_flower():
         log_train_images_after_iteration=1000,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='dtd',
+        experiment_name='vgg_flowers',
         val_seed=42,
         val_test_batch_norm_momentum=0.0,
     )

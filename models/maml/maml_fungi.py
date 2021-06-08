@@ -33,7 +33,7 @@ def run_fungi():
 
     maml.train(iterations=15000)
     maml.evaluate(50, seed=42, num_tasks=1000, use_val_batch_statistics=True)
-    # maml.evaluate(50, seed=42, use_val_batch_statistics=False)
+    maml.evaluate(50, seed=42, num_tasks=1000, use_val_batch_statistics=False)
 
 
 if __name__ == '__main__':

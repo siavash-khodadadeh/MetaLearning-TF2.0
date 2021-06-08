@@ -8,7 +8,7 @@ def run_mini_imagenet():
 
     maml = ModelAgnosticMetaLearningModel(
         database=mini_imagenet_database,
-        target_database=ChestXRay8Database(),
+        # target_database=ChestXRay8Database(),
         network_cls=MiniImagenetModel,
         n=5,
         k_ml=1,
