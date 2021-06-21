@@ -1,6 +1,7 @@
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from databases import MiniImagenetDatabase, ISICDatabase, EuroSatDatabase, PlantDiseaseDatabase, ChestXRay8Database
+from databases import MiniImagenetDatabase, ISICDatabase, EuroSatDatabase, PlantDiseaseDatabase, ChestXRay8Database, \
+    Omniglot84x84Database, AirplaneDatabase, FungiDatabase, CUBDatabase, DTDDatabase, VGGFlowerDatabase
 
 
 def run_mini_imagenet():
@@ -8,14 +9,14 @@ def run_mini_imagenet():
 
     maml = ModelAgnosticMetaLearningModel(
         database=mini_imagenet_database,
-        # target_database=ChestXRay8Database(),
+        test_database=MiniImagenetDatabase(),
         network_cls=MiniImagenetModel,
         n=5,
         k_ml=1,
         k_val_ml=5,
         k_val=1,
         k_val_val=15,
-        k_test=15,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
@@ -33,7 +34,8 @@ def run_mini_imagenet():
     )
 
     maml.train(iterations=60000)
-    maml.evaluate(50, num_tasks=1000, seed=14, use_val_batch_statistics=True)
+    maml.evaluate(50, num_tasks=1000, seed=42, use_val_batch_statistics=True)
+    maml.evaluate(50, num_tasks=1000, seed=42, use_val_batch_statistics=False)
 
 
 if __name__ == '__main__':

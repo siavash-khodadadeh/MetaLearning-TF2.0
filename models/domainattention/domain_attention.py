@@ -31,7 +31,18 @@ class DomainAttention(CombinedCrossDomainMetaLearning):
 
     def get_only_outer_loop_update_layers(self):
         only_outer_loop_update_layers = set()
-        for layer_name in ('conv1', 'conv2', 'conv3', 'conv4', 'bn1', 'bn2', 'bn3', 'bn4', 'attention_network_dense'):
+        for layer_name in (
+            'conv1',
+            'conv2',
+            'conv3',
+            'conv4',
+            'bn1',
+            'bn2',
+            'bn3',
+            'bn4',
+            'attention_network_dense',
+            'classification_dense1'
+        ):
             only_outer_loop_update_layers.add(self.model.get_layer(layer_name))
 
         return only_outer_loop_update_layers
@@ -46,11 +57,11 @@ def run_domain_attention():
     ]
     meta_train_domain_databases = [
         AirplaneDatabase(),
-        FungiDatabase(),
-        CUBDatabase(),
+        # FungiDatabase(),
+        # CUBDatabase(),
     ]
 
-    test_database = EuroSatDatabase()
+    test_database = AirplaneDatabase()
 
     da = DomainAttention(
         train_databases=train_domain_databases,

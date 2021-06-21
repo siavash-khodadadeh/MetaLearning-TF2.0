@@ -2,6 +2,8 @@ import os
 import random
 from typing import Tuple, List
 
+import tensorflow as tf
+
 import settings
 
 from .data_bases import Database
@@ -74,3 +76,19 @@ class MiniImagenetDatabase(JPGParseMixin, Database):
             dataset_folders.append(folders)
         return dataset_folders[0], dataset_folders[1], dataset_folders[2]
 
+
+class Omniglot84x84Database(OmniglotDatabase):
+    def __init__(self, *args, **kwargs):
+        super(Omniglot84x84Database, self).__init__(*args, **kwargs)
+        self.input_shape = (84, 84, 3)
+
+    def _get_parse_function(self):
+        # @tf.function
+        def parse_function(example_address):
+            image = tf.image.decode_jpeg(tf.io.read_file(example_address))
+            image = tf.image.resize(image, (84, 84))
+            image = tf.squeeze(image, axis=2)
+            image = tf.stack((image, image, image), axis=2)
+            image = tf.cast(image, tf.float32)
+            return image / 255.
+        return parse_function

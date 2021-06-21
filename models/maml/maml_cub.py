@@ -1,6 +1,7 @@
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
-from databases import CUBDatabase
+from databases import CUBDatabase, Omniglot84x84Database, AirplaneDatabase, FungiDatabase, DTDDatabase, \
+    VGGFlowerDatabase, MiniImagenetDatabase
 
 
 def run_cub():
@@ -8,13 +9,14 @@ def run_cub():
 
     maml = ModelAgnosticMetaLearningModel(
         database=cub_database,
+        test_database=MiniImagenetDatabase(),
         network_cls=MiniImagenetModel,
         n=5,
         k_ml=1,
         k_val_ml=5,
         k_val=1,
         k_val_val=15,
-        k_test=1,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,

@@ -15,7 +15,8 @@ class DomainAttentionModel(tf.keras.models.Model):
         db_encoder_lr,
         root,
         image_shape=(84, 84, 3),
-        channel_wise_attention=True,
+        spatial_attention=True,
+        channel_wise_attention=False,
         element_wise_attention=False,
         dense_layer_sizes=None,
         *args,
@@ -30,6 +31,7 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.feature_networks = []
         self.element_wise_attention = element_wise_attention
         self.channel_wise_attention = channel_wise_attention
+        self.spatial_attention = spatial_attention
         if dense_layer_sizes is not None:
             self.dense_layer_sizes = dense_layer_sizes
         else:
@@ -37,22 +39,38 @@ class DomainAttentionModel(tf.keras.models.Model):
         self.perform_pre_training()
 
         self.max_pool = tf.keras.layers.MaxPool2D(pool_size=(2, 2), strides=(2, 2), name='max_pool')
-        self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
-        self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
-        self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
-        self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
-        self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
-        self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
-        self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
-        self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
+
+        self.scratch_training = False
+        if not self.scratch_training:
+            self.conv1 = tf.keras.layers.Conv2D(32, 3, name='conv1')
+            self.bn1 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn1')
+            self.conv2 = tf.keras.layers.Conv2D(32, 3, name='conv2')
+            self.bn2 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn2')
+            self.conv3 = tf.keras.layers.Conv2D(32, 3, name='conv3')
+            self.bn3 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn3')
+            self.conv4 = tf.keras.layers.Conv2D(32, 3, name='conv4')
+            self.bn4 = tf.keras.layers.BatchNormalization(center=True, scale=False, name='bn4')
         self.flatten = tf.keras.layers.Flatten(name='flatten')
-        if self.channel_wise_attention:
+
+        if self.scratch_training:
+            pass
+        elif self.channel_wise_attention:
             self.channels_attention = list()
             for i in range(len(self.feature_networks)):
                 self.channels_attention.append(
                     tf.keras.layers.Dense(
                         32,
                         activation='sigmoid',
+                        name=f'channel_attention_{i}'
+                    )
+                )
+        elif self.spatial_attention:
+            self.channels_attention = list()
+            for i in range(len(self.feature_networks)):
+                self.channels_attention.append(
+                    tf.keras.layers.Dense(
+                        3 * 3,
+                        activation='softmax',
                         name=f'channel_attention_{i}'
                     )
                 )
@@ -84,14 +102,26 @@ class DomainAttentionModel(tf.keras.models.Model):
         return tf.keras.activations.relu(batch_normalized_out)
 
     def call(self, inputs, training=None, mask=None):
-        weights = self.conv_block(inputs, self.conv1, self.bn1, training=training)
-        weights = self.conv_block(weights, self.conv2, self.bn2, training=training)
-        weights = self.conv_block(weights, self.conv3, self.bn3, training=training)
-        weights = self.conv_block(weights, self.conv4, self.bn4, training=training)
-        weights = self.flatten(weights)
+        if not self.scratch_training:
+            weights = self.conv_block(inputs, self.conv1, self.bn1, training=training)
+            weights = self.conv_block(weights, self.conv2, self.bn2, training=training)
+            weights = self.conv_block(weights, self.conv3, self.bn3, training=training)
+            weights = self.conv_block(weights, self.conv4, self.bn4, training=training)
+            weights = self.flatten(weights)
         feature_vectors = list()
 
-        if self.channel_wise_attention:
+        if self.scratch_training:
+            for i, feature_network in enumerate(self.feature_networks):
+                c1 = feature_network.get_conv1_features(inputs, training=False)
+                c2 = feature_network.get_conv2_features(c1, training=False)
+                c3 = feature_network.get_conv3_features(c2, training=False)
+                c4 = feature_network.get_conv4_features(c3, training=False)
+                feature_vectors.append(c4)
+
+            feature_vectors = tf.stack(feature_vectors, axis=1)
+            x = self.flatten(feature_vectors)
+
+        elif self.channel_wise_attention:
             for i, feature_network in enumerate(self.feature_networks):
                 c1 = feature_network.get_conv1_features(inputs, training=False)
                 c2 = feature_network.get_conv2_features(c1, training=False)
@@ -100,6 +130,21 @@ class DomainAttentionModel(tf.keras.models.Model):
 
                 attention_features = self.channels_attention[i](weights)
                 feature_vector = c4 * tf.reshape(attention_features, (attention_features.shape[0], 1, 1, 32))
+                feature_vector = feature_network.forward_flatten(feature_vector)
+                feature_vectors.append(feature_vector)
+
+            feature_vectors = tf.stack(feature_vectors, axis=1)
+            x = self.flatten(feature_vectors)
+
+        elif self.spatial_attention:
+            for i, feature_network in enumerate(self.feature_networks):
+                c1 = feature_network.get_conv1_features(inputs, training=False)
+                c2 = feature_network.get_conv2_features(c1, training=False)
+                c3 = feature_network.get_conv3_features(c2, training=False)
+                c4 = feature_network.get_conv4_features(c3, training=False)
+
+                attention_features = self.channels_attention[i](weights)
+                feature_vector = c4 * tf.reshape(attention_features, (attention_features.shape[0], 3, 3, 1))
                 feature_vector = feature_network.forward_flatten(feature_vector)
                 feature_vectors.append(feature_vector)
 

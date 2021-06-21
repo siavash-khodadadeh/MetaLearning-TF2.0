@@ -11,6 +11,7 @@ from models.maml.maml import ModelAgnosticMetaLearningModel
 class MAMLUMTRA(ModelAgnosticMetaLearningModel):
     def __init__(self, *args, **kwargs):
         super(MAMLUMTRA, self).__init__(*args, **kwargs)
+        print(self.experiment_name)
         handle = 'https://tfhub.dev/google/image_augmentation/nas_imagenet/1'
         self.hub_model = hub.load(handle).signatures['from_decoded_images']
 

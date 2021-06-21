@@ -18,7 +18,27 @@ class SetupCaller(type):
         config_json_path = os.path.join(obj.get_root(), obj.get_config_info(), 'config.json')
 
         kwargs['database'] = kwargs['database'].get_config_info()
-        kwargs['network_cls'] = kwargs['network_cls'].__name__
+
+        if 'val_database' in kwargs and kwargs['val_database'] is not None:
+            kwargs['val_database'] = kwargs['val_database'].get_config_info()
+
+        if 'test_database' in kwargs and kwargs['test_database'] is not None:
+            kwargs['test_database'] = kwargs['test_database'].get_config_info()
+
+        if 'network_cls' in kwargs and kwargs['network_cls'] is not None:
+            kwargs['network_cls'] = kwargs['network_cls'].__name__
+
+        if 'train_databases' in kwargs and kwargs['train_databases'] is not None:
+            temp = []
+            for train_database in kwargs['train_databases']:
+                temp.append(train_database.get_config_info())
+            kwargs['train_databases'] = temp
+        if 'meta_train_databases' in kwargs and kwargs['meta_train_databases'] is not None:
+            temp = []
+            for train_database in kwargs['meta_train_databases']:
+                temp.append(train_database.get_config_info())
+            kwargs['meta_train_databases'] = temp
+
         config_dict = {'args': args, 'kwargs': kwargs}
 
         os.makedirs(os.path.dirname(config_json_path), exist_ok=True)
@@ -286,6 +306,9 @@ class BaseModel(metaclass=SetupCaller):
         average and variance which they learned during the updates."""
         # TODO add ability to set batch norm momentum if use_val_batch_statistics=False
         self.test_dataset = self.get_test_dataset(num_tasks=num_tasks, seed=seed)
+        print(self.test_database.__class__)
+        print(f'K_test: {self.k_test}')
+        print(f'K_test_val: {self.k_val_test}')
         self.load_model(iterations=iterations_to_load_from)
 
         accs = list()

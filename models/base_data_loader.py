@@ -45,7 +45,8 @@ class BaseDataLoader(object):
             n=self.n,
             k=self.k_ml,
             k_validation=self.k_val_ml,
-            meta_batch_size=self.meta_batch_size
+            meta_batch_size=self.meta_batch_size,
+            instance_parse_function=self.get_parse_function(),
         )
         return dataset
 
@@ -57,6 +58,7 @@ class BaseDataLoader(object):
             k_validation=self.k_val_val,
             meta_batch_size=1,
             seed=self.val_seed,
+            instance_parse_function=self.get_val_parse_function(),
         )
         val_dataset = val_dataset.repeat(-1)
         val_dataset = val_dataset.take(self.num_tasks_val)
@@ -70,7 +72,8 @@ class BaseDataLoader(object):
             k=self.k_test,
             k_validation=self.k_val_test,
             meta_batch_size=1,
-            seed=seed
+            seed=seed,
+            instance_parse_function=self.get_test_parse_function(),
         )
         test_dataset = test_dataset.repeat(-1)
         test_dataset = test_dataset.take(num_tasks)
@@ -125,6 +128,8 @@ class BaseDataLoader(object):
             new_instances = list()
             for i in range(2 * k - 1):
                 new_instance = instances + tf.zeros_like(instances)
+                # if i % 2 == 0:
+                #     new_instance = tf.image.flip_left_right(instances)
                 new_instances.append(new_instance)
 
             new_instances = tf.concat(new_instances, axis=0)
@@ -226,7 +231,7 @@ class BaseDataLoader(object):
         labels_dataset = self.make_labels_dataset(n, k, k_validation, one_hot_labels=one_hot_labels)
 
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
-        dataset = dataset.batch(meta_batch_size)
+        dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
         setattr(dataset, 'steps_per_epoch', tf.data.experimental.cardinality(dataset))
         return dataset
@@ -322,3 +327,13 @@ class BaseDataLoader(object):
         """Returns a function which get an example_address
          and processes it such that it will be input to the network."""
         return self.database._get_parse_function()
+
+    def get_val_parse_function(self):
+        """Returns a function which get an example_address
+         and processes it such that it will be input to the network."""
+        return self.val_database._get_parse_function()
+
+    def get_test_parse_function(self):
+        """Returns a function which get an example_address
+         and processes it such that it will be input to the network."""
+        return self.test_database._get_parse_function()

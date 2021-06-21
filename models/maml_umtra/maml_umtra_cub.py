@@ -1,15 +1,31 @@
-from databases import AirplaneDatabase
+import tensorflow as tf
+
+from databases import CelebADatabase, CUBDatabase
 from models.maml_umtra.maml_umtra import MAMLUMTRA
 from networks.maml_umtra_networks import MiniImagenetModel
+
+
+class MAMLUMTRANMI(MAMLUMTRA):
+    def outer_loss(self, labels, logits, inner_losses=None):
+        losses = list()
+        import itertools
+
+        for permutation in itertools.permutations([0, 1, 2, 3, 4]):
+            new_labels = tf.gather(labels, permutation, axis=1)
+            loss = tf.reduce_mean(tf.losses.categorical_crossentropy(new_labels, logits, from_logits=True))
+            losses.append(loss)
+
+        return tf.reduce_min(losses)
+
 
 if __name__ == '__main__':
     # import tensorflow as tf
     # tf.config.experimental_run_functions_eagerly(True)
 
-    airplane_database = AirplaneDatabase()
+    cub_database = CUBDatabase()
 
-    maml_umtra = MAMLUMTRA(
-        database=airplane_database,
+    maml_umtra = MAMLUMTRANMI(
+        database=cub_database,
         network_cls=MiniImagenetModel,
         n=5,
         k_ml=1,
@@ -28,7 +44,7 @@ if __name__ == '__main__':
         log_train_images_after_iteration=1000,
         num_tasks_val=100,
         clip_gradients=True,
-        experiment_name='airplane',
+        experiment_name='cub_nmi',
         val_seed=42,
         val_test_batch_norm_momentum=0.0
     )
@@ -37,4 +53,4 @@ if __name__ == '__main__':
     # maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
 
     maml_umtra.train(iterations=60000)
-    maml_umtra.evaluate(50, seed=42, num_tasks=1000)
+    maml_umtra.evaluate(iterations=50, num_tasks=1000, seed=42)

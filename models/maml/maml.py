@@ -123,6 +123,9 @@ class ModelAgnosticMetaLearningModel(BaseModel):
         meta_trainable_variables = list()
 
         gradients = {variable.name: gradient for variable, gradient in zip(self.model.trainable_variables, gradients)}
+        #
+        # tf.print('outer loop update layers: ', end='')
+        # tf.print([layer for layer in self.only_outer_loop_update_layers])
 
         for variable in self.model.variables:
             references = self.extract_variable_reference_from_variable_name(variable.name)
@@ -138,13 +141,20 @@ class ModelAgnosticMetaLearningModel(BaseModel):
             # TODO check this further
             # It is important to check by name in order not to leak to inner loop models. Otherwise the result will not
             # be correct.
+            # tf.print('model layer name: ', end='')
+            # tf.print(model_layer.name)
+            # tf.print(model_layer.name not in self.only_outer_loop_update_layers)
             if variable.name in gradients and model_layer.name not in self.only_outer_loop_update_layers:
+                # tf.print('has_gradient: ', end='')
+                # tf.print(variable.name)
                 gradient = gradients[variable.name]
                 if assign:
                     updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr] - self.lr_inner_ml * gradient)
                 else:
                     updated_model_layer.__dict__[attr] = model_layer.__dict__[attr] - self.lr_inner_ml * gradient
             else:
+                # tf.print('no_gradient: ', end='')
+                # tf.print(variable.name)
                 if assign:
                     updated_model_layer.__dict__[attr].assign(model_layer.__dict__[attr])
                 else:

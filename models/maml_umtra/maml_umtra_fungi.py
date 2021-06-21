@@ -13,7 +13,7 @@ if __name__ == '__main__':
         network_cls=MiniImagenetModel,
         n=5,
         k_ml=1,
-        k_val_ml=5,
+        k_val_ml=1,
         k_val=1,
         k_val_val=15,
         k_test=1,
@@ -22,7 +22,7 @@ if __name__ == '__main__':
         num_steps_ml=5,
         lr_inner_ml=0.05,
         num_steps_validation=5,
-        save_after_iterations=1000,
+        save_after_iterations=15000,
         meta_learning_rate=0.001,
         report_validation_frequency=250,
         log_train_images_after_iteration=1000,
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     )
 
     shape = (84, 84, 3)
-    maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
+    # maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
 
-    maml_umtra.train(iterations=3000)
+    maml_umtra.train(iterations=60000)
     maml_umtra.evaluate(50, num_tasks=1000, seed=42)

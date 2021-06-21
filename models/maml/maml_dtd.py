@@ -1,4 +1,5 @@
-from databases import DTDDatabase
+from databases import DTDDatabase, Omniglot84x84Database, AirplaneDatabase, FungiDatabase, CUBDatabase, \
+    VGGFlowerDatabase, MiniImagenetDatabase
 from models.maml.maml import ModelAgnosticMetaLearningModel
 from networks.maml_umtra_networks import MiniImagenetModel
 
@@ -7,13 +8,14 @@ def run_dtd():
     dtd_database = DTDDatabase()
     maml = ModelAgnosticMetaLearningModel(
         database=dtd_database,
+        test_database=MiniImagenetDatabase(),
         network_cls=MiniImagenetModel,
         n=5,
         k_ml=1,
         k_val_ml=5,
         k_val=1,
         k_val_val=15,
-        k_test=1,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
