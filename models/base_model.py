@@ -40,7 +40,10 @@ class SetupCaller(type):
                 temp.append(train_database.get_config_info())
             kwargs['meta_train_databases'] = temp
 
-        config_dict = {'args': args, 'kwargs': kwargs}
+        if 'set_of_frozen_layers' in kwargs and kwargs['set_of_frozen_layers'] is not None:
+            kwargs['set_of_frozen_layers'] = list(kwargs['set_of_frozen_layers'])
+
+        config_dict = {'args': args, 'kwargs': kwargs, 'time': datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}
 
         os.makedirs(os.path.dirname(config_json_path), exist_ok=True)
 
@@ -143,8 +146,6 @@ class BaseModel(metaclass=SetupCaller):
         config_info = self.get_config_str()
         if self.experiment_name is not None:
             config_info += '_' + self.experiment_name
-
-        config_info += '_' + datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
         return config_info
 
