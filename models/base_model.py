@@ -2,6 +2,7 @@ import os
 import sys
 from abc import abstractmethod
 import json
+from datetime import datetime
 
 import tensorflow as tf
 import numpy as np
@@ -142,6 +143,8 @@ class BaseModel(metaclass=SetupCaller):
         config_info = self.get_config_str()
         if self.experiment_name is not None:
             config_info += '_' + self.experiment_name
+
+        config_info += '_' + datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
         return config_info
 
