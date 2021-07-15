@@ -13,12 +13,13 @@ def run_omniglot():
     sml = SML(
         database=omniglot_database,
         network_cls=SimpleModel,
-        n=5,
-        k=1,
+        n=20,
+        k_ml=1,
         k_val_ml=5,
+        k_val=1,
         k_val_val=15,
+        k_test=5,
         k_val_test=15,
-        k_test=1,
         meta_batch_size=4,
         num_steps_ml=5,
         lr_inner_ml=0.05,
@@ -32,14 +33,13 @@ def run_omniglot():
         input_shape=(224, 224, 3),
         preprocess_function=tf.keras.applications.vgg19.preprocess_input,
         log_train_images_after_iteration=1000,
-        number_of_tasks_val=100,
-        number_of_tasks_test=1000,
+        num_tasks_val=100,
         clip_gradients=True,
         report_validation_frequency=250,
         experiment_name='omniglot_imagenet_features'
     )
     sml.train(iterations=60000)
-    sml.evaluate(iterations=50, seed=42)
+    sml.evaluate(iterations=50, num_tasks=1000, seed=42)
 
 
 if __name__ == '__main__':

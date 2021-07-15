@@ -280,7 +280,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
 
         return val_acc, val_loss
 
-    def outer_loss(self, labels, logits, inner_losses=None):
+    def outer_loss(self, labels, logits, inner_losses=None, method='train'):
         loss = tf.reduce_mean(
             tf.losses.categorical_crossentropy(labels, logits, from_logits=True)
         )
@@ -318,7 +318,7 @@ class ModelAgnosticMetaLearningModel(BaseModel):
     @tf.function
     def _evaluate_model_for_eval(self, val_ds, val_labels, training):
         updated_model_logits = self.eval_model(val_ds, training=training)
-        val_loss = self.outer_loss(val_labels, updated_model_logits)
+        val_loss = self.outer_loss(val_labels, updated_model_logits, method='eval')
 
         predicted_class_labels = self.predict_class_labels_from_logits(updated_model_logits)
         real_labels = self.convert_labels_to_real_labels(val_labels)

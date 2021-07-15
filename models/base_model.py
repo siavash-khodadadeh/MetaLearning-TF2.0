@@ -43,6 +43,14 @@ class SetupCaller(type):
         if 'set_of_frozen_layers' in kwargs and kwargs['set_of_frozen_layers'] is not None:
             kwargs['set_of_frozen_layers'] = list(kwargs['set_of_frozen_layers'])
 
+        if 'feature_model' in kwargs and kwargs['feature_model'] is not None:
+            # SML config
+            kwargs['feature_model'] = kwargs['feature_model'].__class__.__name__
+            kwargs['n_clusters'] = kwargs['n_clusters']
+            kwargs['feature_size'] = kwargs['feature_size']
+            kwargs['input_shape'] = kwargs['input_shape']
+            kwargs['preprocess_function'] = kwargs['preprocess_function'].__name__
+
         config_dict = {'args': args, 'kwargs': kwargs, 'time': datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}
 
         os.makedirs(os.path.dirname(config_json_path), exist_ok=True)
@@ -330,6 +338,18 @@ class BaseModel(metaclass=SetupCaller):
             if counter % remainder_num == 0:
                 print(f'{counter} / {num_tasks} are evaluated.')
 
+                if counter != 0:
+                    cur_acc_mean = np.mean(accs)
+                    cur_acc_std = np.std(accs)
+                    print(f'loss mean: {np.mean(losses)}')
+                    print(f'loss std: {np.std(losses)}')
+                    print(f'accuracy mean: {cur_acc_mean}')
+                    print(f'accuracy std: {cur_acc_std}')
+                    ci = 1.96 * cur_acc_std / np.sqrt(counter)
+                    print(
+                        f'current acc: {cur_acc_mean * 100:0.2f} +- {ci * 100:0.2f}'
+                    )
+
             counter += 1
             tasks_final_accuracy, tasks_final_losses = tf.map_fn(
                 losses_func,
@@ -349,6 +369,8 @@ class BaseModel(metaclass=SetupCaller):
 
         final_acc_mean = np.mean(accs)
         final_acc_std = np.std(accs)
+
+        print(f'{num_tasks} / {num_tasks} are evaluated.')
 
         print(f'loss mean: {np.mean(losses)}')
         print(f'loss std: {np.std(losses)}')

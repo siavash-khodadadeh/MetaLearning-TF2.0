@@ -16,7 +16,7 @@ if __name__ == '__main__':
         k_val_ml=1,
         k_val=1,
         k_val_val=15,
-        k_test=1,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
@@ -37,4 +37,4 @@ if __name__ == '__main__':
     # maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
 
     maml_umtra.train(iterations=60000)
-    maml_umtra.evaluate(iterations=50, num_tasks=1000, seed=42)
+    maml_umtra.evaluate(iterations=50, num_tasks=1000, seed=42, use_val_batch_statistics=False)

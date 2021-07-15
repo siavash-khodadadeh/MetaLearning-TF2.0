@@ -15,7 +15,7 @@ if __name__ == '__main__':
         k_val_ml=1,
         k_val=1,
         k_val_val=15,
-        k_test=1,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
@@ -38,4 +38,4 @@ if __name__ == '__main__':
     # Train 15K with mlr 0.001
     # Train 10K with mlr 0.0001
     maml_umtra.train(iterations=60000)
-    maml_umtra.evaluate(50, seed=42, num_tasks=1000)
+    maml_umtra.evaluate(50, seed=42, num_tasks=1000, use_val_batch_statistics=False)

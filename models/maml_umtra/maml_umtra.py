@@ -20,12 +20,29 @@ class MAMLUMTRA(ModelAgnosticMetaLearningModel):
 
     def visualize_umtra_task(self, shape, num_tasks_to_visualize=1):
         import matplotlib.pyplot as plt
+        import scipy
 
         dataset = self.get_train_dataset()
         for item in dataset.take(num_tasks_to_visualize):
-            fig, axes = plt.subplots(self.k_ml + self.k_val_ml, self.n)
-            fig.set_figwidth(self.k_ml + self.k_val_ml)
-            fig.set_figheight(self.n)
+            fig, axes = plt.subplots(
+                self.k_ml + self.k_val_ml,
+                self.n,
+                figsize=(self.n, self.k_ml + self.k_val_ml),
+                gridspec_kw={
+                    'width_ratios': [1] * self.n,
+                    'height_ratios': [1] * (self.k_ml + self.k_val_ml),
+                    'bottom': 0.00,
+                    'top': 0.95,
+                    'right': 1,
+                    'left': 0.05,
+                    'wspace': 0.1,
+                    'hspace': 0.1
+                }
+
+            )
+            # fig, axes = plt.subplots(self.k_ml + self.k_val_ml, self.n)
+            # fig.set_figwidth(self.k_ml + self.k_val_ml)
+            # fig.set_figheight(self.n)
 
             (train_ds, val_ds), (_, _) = item
             # Get the first meta batch
@@ -37,10 +54,18 @@ class MAMLUMTRA(ModelAgnosticMetaLearningModel):
 
             for n in range(self.n):
                 for k in range(self.k_ml):
-                    axes[k, n].imshow(train_ds[n, k, ...], cmap='gray')
+                    axes[k, n].imshow(train_ds[n, k, ...], aspect='equal')
+                    axes[k, n].set_xticklabels([])
+                    axes[k, n].set_xticks([])
+                    axes[k, n].set_yticklabels([])
+                    axes[k, n].set_yticks([])
 
                 for k in range(self.k_val_ml):
-                    axes[k + self.k_ml, n].imshow(val_ds[n, k, ...], cmap='gray')
+                    axes[k + self.k_ml, n].imshow(val_ds[n, k, ...], aspect='equal')
+                    axes[k + self.k_ml, n].set_xticklabels([])
+                    axes[k + self.k_ml, n].set_xticks([])
+                    axes[k + self.k_ml, n].set_yticklabels([])
+                    axes[k + self.k_ml, n].set_yticks([])
 
             plt.show()
 

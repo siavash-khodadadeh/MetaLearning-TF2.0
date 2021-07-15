@@ -13,12 +13,12 @@ def run_omniglot():
     maml = ModelAgnosticMetaLearningModel(
         database=omniglot_database,
         network_cls=SimpleModel,
-        n=5,
+        n=20,
         k_ml=1,
         k_val_ml=5,
         k_val=1,
         k_val_val=15,
-        k_test=1,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
@@ -35,7 +35,7 @@ def run_omniglot():
         val_test_batch_norm_momentum=0.0
     )
 
-    maml.train(iterations=5000)
+    # maml.train(iterations=5000)
     maml.evaluate(iterations=50, num_tasks=1000, use_val_batch_statistics=True, seed=42)
 
 

@@ -48,12 +48,27 @@ def visualize_database(database, save_folder):
 
 
 def visualize_all_domains_together(databases, root_folder_to_save):
-    fig, axes = plt.subplots(4, 12)
-    fig.set_figwidth(12)
-    fig.set_figheight(4)
+    num_instances = 4
+    num_domains = len(databases)
+
+    fig, axes = plt.subplots(
+        num_instances,
+        num_domains,
+        figsize=(num_domains, num_instances),
+        gridspec_kw={
+            'width_ratios': [1] * num_domains,
+            'height_ratios': [1] * num_instances,
+            'bottom': 0.00,
+            'top': 0.95,
+            'right': 1,
+            'left': 0.05,
+            'wspace': 0.1,
+            'hspace': 0.1
+        }
+    )
 
     for i, database in enumerate(databases):
-        dataset = get_dataset_from_database(database, (84, 84, 3)).take(4)
+        dataset = get_dataset_from_database(database, (84, 84, 3)).take(num_instances)
         for j, item in enumerate(dataset):
             axes[j, i].set_xticklabels([])
             axes[j, i].set_xticks([])
@@ -66,7 +81,7 @@ def visualize_all_domains_together(databases, root_folder_to_save):
         axes[0, i].set_xlabel(title_name)
 
     # fig.suptitle('', fontsize=12, y=1)
-    plt.savefig(fname=os.path.join(root_folder_to_save, 'all_domains.pdf'))
+    plt.savefig(fname=os.path.join(root_folder_to_save, 'all_domains2.pdf'))
     plt.show()
 
 
@@ -85,11 +100,11 @@ if __name__ == '__main__':
         FungiDatabase(),
         VGGFlowerDatabase(),
         # TrafficSignDatabase(),
-        MSCOCODatabase(),
-        PlantDiseaseDatabase(),
-        EuroSatDatabase(),
-        ISICDatabase(),
-        ChestXRay8Database(),
+        # MSCOCODatabase(),
+        # PlantDiseaseDatabase(),
+        # EuroSatDatabase(),
+        # ISICDatabase(),
+        # ChestXRay8Database(),
     )
 
     # for database in databases:

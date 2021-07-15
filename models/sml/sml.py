@@ -19,11 +19,12 @@ class SML(ModelAgnosticMetaLearningModel):
             database,
             network_cls,
             n,
-            k,
+            k_ml,
             k_val_ml,
+            k_val,
             k_val_val,
-            k_val_test,
             k_test,
+            k_val_test,
             meta_batch_size,
             num_steps_ml,
             lr_inner_ml,
@@ -37,23 +38,24 @@ class SML(ModelAgnosticMetaLearningModel):
             feature_size,
             input_shape,
             preprocess_function=None,
-            number_of_tasks_val=-1,  # Make sure the val and test dataset pick at least this many tasks.
-            number_of_tasks_test=-1,
+            num_tasks_val=-1,  # Make sure the val and test dataset pick at least this many tasks.
             clip_gradients=False,
             experiment_name=None,
             val_seed=-1,
             val_test_batch_norm_momentum=0.0,
-            target_database=None
+            val_database=None,
+            test_database=None,
     ):
         super(SML, self).__init__(
             database=database,
             network_cls=network_cls,
             n=n,
-            k=k,
+            k_ml=k_ml,
             k_val_ml=k_val_ml,
+            k_val=k_val,
             k_val_val=k_val_val,
-            k_val_test=k_val_test,
             k_test=k_test,
+            k_val_test=k_val_test,
             meta_batch_size=meta_batch_size,
             num_steps_ml=num_steps_ml,
             lr_inner_ml=lr_inner_ml,
@@ -62,13 +64,13 @@ class SML(ModelAgnosticMetaLearningModel):
             meta_learning_rate=meta_learning_rate,
             report_validation_frequency=report_validation_frequency,
             log_train_images_after_iteration=log_train_images_after_iteration,
-            number_of_tasks_val=number_of_tasks_val,
-            number_of_tasks_test=number_of_tasks_test,
+            num_tasks_val=num_tasks_val,
             clip_gradients=clip_gradients,
             experiment_name=experiment_name,
             val_seed=val_seed,
             val_test_batch_norm_momentum=val_test_batch_norm_momentum,
-            target_database=target_database
+            val_database=val_database,
+            test_database=test_database
         )
         self.features_model = feature_model
         self.n_clusters = n_clusters
@@ -143,8 +145,8 @@ class SML(ModelAgnosticMetaLearningModel):
             return tf.py_function(get_instances, inp=[cluster_instances], Tout=[tf.string, tf.string])
 
         def parse_function(tr_imgs_addresses, val_imgs_addresses):
-            tr_imgs = tf.map_fn(self.get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
-            val_imgs = tf.map_fn(self.get_parse_function(), val_imgs_addresses, dtype=tf.float32)
+            tr_imgs = tf.map_fn(self.data_loader.get_parse_function(), tr_imgs_addresses, dtype=tf.float32)
+            val_imgs = tf.map_fn(self.data_loader.get_parse_function(), val_imgs_addresses, dtype=tf.float32)
 
             return tf.stack(tr_imgs), tf.stack(val_imgs)
 
@@ -165,7 +167,7 @@ class SML(ModelAgnosticMetaLearningModel):
         dataset = dataset.map(parse_function, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(n, drop_remainder=True)
 
-        labels_dataset = self.make_labels_dataset(n, k, k_val, one_hot_labels)
+        labels_dataset = self.data_loader.make_labels_dataset(n, k, k_val, one_hot_labels)
         dataset = tf.data.Dataset.zip((dataset, labels_dataset))
         dataset = dataset.batch(meta_batch_size, drop_remainder=True)
 
@@ -228,7 +230,7 @@ class SML(ModelAgnosticMetaLearningModel):
         tr_dataset = self.get_meta_learning_dataset_from_clusters(
             clusters_dir=clusters_files_dir,
             n=self.n,
-            k=self.k,
+            k=self.k_ml,
             k_val=self.k_val_ml,
             meta_batch_size=self.meta_batch_size
         )

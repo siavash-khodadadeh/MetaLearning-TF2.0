@@ -12,11 +12,11 @@ if __name__ == '__main__':
         database=airplane_database,
         network_cls=MiniImagenetModel,
         n=5,
-        k_ml=1,
-        k_val_ml=1,
+        k_ml=2,
+        k_val_ml=5,
         k_val=1,
         k_val_val=15,
-        k_test=1,
+        k_test=5,
         k_val_test=15,
         meta_batch_size=4,
         num_steps_ml=5,
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     )
 
     shape = (84, 84, 3)
-    # maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
+    maml_umtra.visualize_umtra_task(shape, num_tasks_to_visualize=2)
 
     maml_umtra.train(iterations=60000)
-    maml_umtra.evaluate(50, seed=42, num_tasks=1000)
+    maml_umtra.evaluate(50, seed=42, num_tasks=1000, use_val_batch_statistics=False)
